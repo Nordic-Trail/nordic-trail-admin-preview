@@ -37,7 +37,7 @@ footer{color:#91a495;font-size:12px;text-align:center;padding:20px}
 <body>
 <header><div class="brand">NORDIC TRAIL</div><div class="subtitle">ADMIN PREVIEW — TESTY PANELU</div></header>
 <main>
-<p class="warning"><strong>Uwaga:</strong> to wersja testowa interfejsu, ale zatwierdzanie i odrzucanie naprawdę zmienia punkty w istniejącej bazie Supabase. Nie zatwierdzaj fikcyjnych punktów.</p>
+<p class="warning"><strong>Uwaga:</strong> to wersja testowa, ale decyzje naprawdę zapisują się w Supabase. Uznanie zgłoszenia zmiany punktu nie aktualizuje automatycznie statusu drogi ani szlabanu.</p>
 <section id="authSection">
 <h2>Logowanie administratora</h2>
 <div id="loginSection">
@@ -59,6 +59,13 @@ footer{color:#91a495;font-size:12px;text-align:center;padding:20px}
 <h2 style="margin-top:22px">Podgląd na mapie</h2>
 <div id="map"></div>
 <p class="hint">Wybierz „Pokaż na mapie” przy punkcie. Widok mapy nie ujawnia punktów innym użytkownikom.</p>
+<div id="reportsSection" hidden style="border-top:1px solid #42574a;margin-top:24px;padding-top:20px">
+<h2>Zgłoszenia zmian istniejących punktów</h2>
+<p class="warning"><strong>Uwaga:</strong> „Uznaj zgłoszenie” zapisuje decyzję i historię, ale nie zmienia statusu drogi, nie otwiera przejazdu i nie usuwa szlabanu z mapy. Zmianę mapy należy zweryfikować osobno.</p>
+<button id="refreshReports" type="button" class="secondary">Odśwież zgłoszenia</button>
+<p id="reportsMessage" class="hint" role="status" aria-live="polite"></p>
+<div id="reportsQueue"></div>
+</div>
 </section>
 </main>
 <footer>NORDIC TRAIL — Testy administratora · OpenStreetMap contributors</footer>
@@ -80,6 +87,9 @@ const kindLabels={gate:'Brama / szlaban',closed:'Droga zamknięta',place:'Ciekaw
 let currentUser=null;
 let requestSeq=0;
 let saving=false;
+let reportsSeq=0;
+let reportBusy=false;
+const reportMarkers=L.layerGroup().addTo(map);
 function text(tag,value,cls){
  const node=document.createElement(tag);
  node.textContent=String(value??'');
@@ -88,10 +98,15 @@ function text(tag,value,cls){
 }
 function clearAdmin(){
  requestSeq++;
+ reportsSeq++;
  el('adminSection').hidden=true;
+ el('reportsSection').hidden=true;
  el('queue').replaceChildren();
+ el('reportsQueue').replaceChildren();
  el('queueMessage').textContent='';
+ el('reportsMessage').textContent='';
  reviewMarkers.clearLayers();
+ reportMarkers.clearLayers();
 }
 function updateAuth(user){
  const oldId=currentUser?.id;
@@ -168,6 +183,7 @@ async function loadPending(){
    el('queueMessage').textContent='Oczekujące punkty: '+data.length;
    renderQueue(data);
    requestAnimationFrame(()=>map.invalidateSize());
+   void loadReports();
  }catch(error){
    if(seq!==requestSeq||currentUser?.id!==userId)return;
    clearAdmin();
@@ -201,6 +217,127 @@ async function moderate(point,decision){
    el('queue').querySelectorAll('button').forEach(b=>b.disabled=false);
  }
 }
+
+/* Uzupełniająca lista zgłoszeń. Uprawnienia kontrolowane przez Supabase RPC. */
+function previewReport(report) {
+ const coords=validPosition(report);
+ if(!coords){el('reportsMessage').textContent='Brak poprawnych współrzędnych.';return;}
+ map.setView(coords,13);
+ reportMarkers.eachLayer(marker=>{
+   if(marker.options.reportId===String(report.report_id))marker.openPopup();
+ });
+ el('map').scrollIntoView({behavior:'smooth',block:'center'});
+}
+function renderReports(reports){
+ const container=el('reportsQueue');
+ container.replaceChildren();
+ reportMarkers.clearLayers();
+ if(!reports.length){
+   container.appendChild(text('p','Brak zgłoszeń oczekujących na moderację.','hint'));
+   return;
+ }
+ for(const report of reports){
+   const entry=document.createElement('article');
+   entry.className='point';
+   entry.appendChild(text('strong','Zgłoszenie ID '+report.report_id+' · punkt ID '+report.point_id));
+   entry.appendChild(text('p','Rodzaj zgłoszenia: '+(report.report_type||'Nieznany')));
+   entry.appendChild(text('p','Opis zgłoszenia: '+(report.report_note||'Bez opisu')));
+   entry.appendChild(text('p','Punkt: '+(kindLabels[report.point_kind]||report.point_kind||'Nieznany')));
+   entry.appendChild(text('p','Aktualny status punktu: '+(report.point_status||'Brak danych')));
+   entry.appendChild(text('p','Opis punktu: '+(report.point_note||'Bez opisu')));
+   if(report.created_at){
+     const date=new Date(report.created_at);
+     if(!Number.isNaN(date.getTime()))entry.appendChild(text('p','Wysłano: '+date.toLocaleString('pl-PL'),'hint'));
+   }
+   const pos=validPosition(report);
+   if(pos){
+     entry.appendChild(text('p','Współrzędne: '+pos[0].toFixed(5)+', '+pos[1].toFixed(5),'hint'));
+     const marker=L.circleMarker(pos,{
+       radius:11,color:'#8ab6d5',weight:3,fillOpacity:0.45,reportId:String(report.report_id)
+     }).addTo(reportMarkers);
+     const popup=document.createElement('div');
+     popup.appendChild(text('strong','Zgłoszenie ID '+report.report_id));
+     popup.appendChild(text('p',report.report_note||'Bez opisu'));
+     marker.bindPopup(popup);
+     const show=document.createElement('button');
+     show.type='button';
+     show.className='secondary';
+     show.textContent='Pokaż punkt na mapie';
+     show.onclick=()=>previewReport(report);
+     entry.appendChild(show);
+   }
+   const actions=document.createElement('div');
+   actions.className='actions';
+   for(const [decision,caption] of [['approved','Uznaj zgłoszenie'],['rejected','Odrzuć zgłoszenie']]){
+     const button=document.createElement('button');
+     button.type='button';
+     button.textContent=caption;
+     if(decision==='rejected')button.className='reject';
+     button.onclick=()=>moderateReport(report,decision);
+     actions.appendChild(button);
+   }
+   entry.appendChild(actions);
+   container.appendChild(entry);
+ }
+}
+async function loadReports(){
+ const userId=currentUser?.id;
+ if(!userId||el('adminSection').hidden)return;
+ const seq=++reportsSeq;
+ el('reportsSection').hidden=false;
+ el('reportsMessage').textContent='Pobieranie zgłoszeń…';
+ el('refreshReports').disabled=true;
+ try{
+   const {data,error}=await db.rpc('admin_pending_point_reports');
+   if(seq!==reportsSeq||currentUser?.id!==userId||el('adminSection').hidden)return;
+   if(error)throw error;
+   if(!Array.isArray(data))throw new Error('Nieoczekiwany format zgłoszeń');
+   el('reportsMessage').textContent='Zgłoszenia oczekujące: '+data.length;
+   renderReports(data);
+ }catch(error){
+   if(seq!==reportsSeq||currentUser?.id!==userId)return;
+   el('reportsQueue').replaceChildren();
+   reportMarkers.clearLayers();
+   el('reportsMessage').textContent='Nie udało się pobrać zgłoszeń. Sprawdź połączenie lub uprawnienia.';
+   console.error('Błąd kolejki zgłoszeń:',error);
+ }finally{
+   if(seq===reportsSeq)el('refreshReports').disabled=reportBusy;
+ }
+}
+async function moderateReport(report,decision){
+ if(!currentUser||reportBusy||el('adminSection').hidden)return;
+ const id=Number(report.report_id);
+ if(!Number.isSafeInteger(id)||id<=0)return;
+ const act=decision==='approved'?'uznać':'odrzucić';
+ const info=decision==='approved'
+   ?'Zgłoszenie zostanie uznane. Stan punktu na mapie NIE zmieni się automatycznie.'
+   :'Zgłoszenie zostanie odrzucone. Stan punktu na mapie nie zmieni się.';
+ if(!confirm('Czy chcesz '+act+' zgłoszenie ID '+id+'?\n\n'+info))return;
+ reportBusy=true;
+ el('refreshReports').disabled=true;
+ el('reportsQueue').querySelectorAll('button').forEach(b=>b.disabled=true);
+ el('reportsMessage').textContent='Zapisywanie decyzji…';
+ const userId=currentUser.id;
+ try{
+   const {error}=await db.rpc('moderate_point_report',{p_report_id:id,p_decision:decision});
+   if(error)throw error;
+   if(currentUser?.id!==userId)return;
+   await loadReports();
+   if(currentUser?.id===userId&&!el('adminSection').hidden){
+     el('reportsMessage').textContent='Decyzja zapisana. Zgłoszenie usunięte z kolejki; status punktu nie zmienił się.';
+   }
+ }catch(error){
+   console.error('Błąd moderowania zgłoszenia:',error);
+   if(currentUser?.id===userId&&!el('adminSection').hidden){
+     el('reportsMessage').textContent='Nie udało się potwierdzić decyzji. Sprawdź dane w Supabase.';
+   }
+ }finally{
+   reportBusy=false;
+   el('refreshReports').disabled=false;
+   el('reportsQueue').querySelectorAll('button').forEach(b=>b.disabled=false);
+ }
+}
+el('refreshReports').onclick=()=>{if(!reportBusy)void loadReports();};
 el('refreshButton').onclick=()=>{if(!saving)void loadPending();};
 el('loginButton').onclick=async()=>{
  const email=el('loginEmail').value.trim();
