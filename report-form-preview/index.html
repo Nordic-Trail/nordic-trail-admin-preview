@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NORDIC TRAIL — Test formularza zgłoszeń</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:#101b17;color:#f2f0e7;font-family:Arial,sans-serif}
+header{padding:18px;background:#172720;border-bottom:1px solid #35483c}
+.brand{font-size:24px;font-weight:800;letter-spacing:3px}
+.sub{font-size:12px;color:#aab8a9;margin-top:5px}
+main{padding:14px}
+h2{font-size:17px;margin:4px 0 12px}
+select,input,button{width:100%;padding:12px;margin:5px 0;border-radius:9px;border:1px solid #536657;background:#202f26;color:#fff;font-size:15px}
+button{background:#b7c58b;color:#172219;font-weight:bold;border:0}
+button.secondary{background:#293a30;color:#f2f0e7;border:1px solid #536657}
+#map{height:48vh;min-height:300px;border-radius:12px;border:1px solid #536657;margin-top:12px}
+.hint{font-size:13px;color:#b8c5b7;line-height:1.5}
+#points{font-size:13px;line-height:1.6}
+footer{text-align:center;color:#9baa9b;font-size:11px;padding:18px}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">NORDIC TRAIL</div>
+  <div class="sub">EXPLORE • RESPECT • DISCOVER — SWEDEN</div>
+</header>
+<main>
+<p style="background:#2b3022;border-left:4px solid #d9ad54;padding:12px;line-height:1.5;font-size:14px"><strong>WERSJA TESTOWA FORMULARZA.</strong> Nie jest to główna aplikacja NORDIC TRAIL. Zgłoszenia wysłane tutaj naprawdę zapisują się w Supabase i trafiają do kolejki administratora. Nie zgłaszaj fikcyjnych zmian bez oznaczenia ich w opisie jako testowe. Potwierdzenie zgłoszenia nie oznacza, że przejazd jest dozwolony.</p>
+  <div id="authPanel" style="margin-bottom:18px">
+  <h2>Konto NORDIC TRAIL</h2>
+
+  <input
+    id="loginEmail"
+    type="email"
+    placeholder="Twój adres e-mail"
+    autocomplete="email"
+  >
+
+  <button id="loginBtn" type="button">
+    Zaloguj się przez e-mail
+  </button>
+
+  <button id="logoutBtn" type="button"
+    class="secondary" style="display:none">
+    Wyloguj się
+  </button>
+
+  <p id="authStatus" class="hint" role="status" aria-live="polite">
+    Nie jesteś zalogowany
+  </p>
+  </div>
+  <h2>Dodaj punkt na mapie</h2>
+  <p class="hint">Wybierz rodzaj punktu, a następnie dotknij odpowiedniego miejsca na mapie.</p>
+  <select id="kind">
+    <option value="gate">🚧 Brama / szlaban</option>
+    <option value="closed">⛔ Droga zamknięta / nieprzejezdna</option>
+    <option value="place">📍 Ciekawe miejsce</option>
+  </select>
+  <input id="note" maxlength="120" placeholder="Opis punktu (opcjonalnie)">
+  <div id="map"></div>
+  <button id="export">Eksportuj punkty do GPX</button>
+  <button id="clear" class="secondary">Usuń wszystkie moje punkty</button>
+  <h2 style="margin-top:22px">Moje zapisane punkty</h2>
+  <div id="points">Wczytywanie…</div>
+  <p class="hint">Twoje punkty są zapisywane tylko w tej przeglądarce. Nie są publikowane innym użytkownikom.</p>
+  <h2 style="margin-top:22px">Moje zgłoszenia</h2>
+<div id="myPendingPoints" class="hint">
+  Wczytywanie zgłoszeń...
+</div>
+  <h2 style="margin-top:22px">Punkty publiczne (tylko do odczytu)</h2>
+  <div id="publicPoints" class="hint">Wczytywanie punktów publicznych…</div>
+</main>
+<footer>Map data © OpenStreetMap contributors</footer>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+  window.onerror = function(message, source, line) {
+  alert('Błąd JavaScript w linii ' + line + ': ' + message);
+};
+
+window.addEventListener('unhandledrejection', function(event) {
+  alert('Błąd aplikacji: ' + String(event.reason));
+});
+
+  // NORDIC TRAIL - polaczenie z Supabase
+const SUPABASE_URL = 'https://kwhkxedmtehqplvnmjka.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_9NwkykVx5UuNhnyPlD5vFw_t7zfqSvE';
+
+const db = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_KEY
+);
+const map=L.map('map').setView([62.2,15.2],5);
+    map.attributionControl.setPrefix('');
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+ maxZoom:19,
+ attribution:'© OpenStreetMap contributors'
+}).addTo(map);
+
+const colors={gate:'#e5b65c',closed:'#ef7168',place:'#a8c68a'};
+const labels={
+ gate:'Brama / szlaban',
+ closed:'Droga zamknięta / nieprzejezdna',
+ place:'Ciekawe miejsce'
+};
+  
+const statuses={
+  gate:['Otwarty','Zamknięty','Nieznany'],
+  closed:['Przejezdna','Nieprzejezdna','Do sprawdzenia'],
+  place:['Dostępne','Niedostępne']
+};
+
+let points=[];
+let publicPoints=[];
+    let myPendingPoints=[];
+let currentUser=null;
+try{points=JSON.parse(localStorage.getItem('nordicTrailPointsReportPreview')||'[]')}catch(e){}
+const markers=L.layerGroup().addTo(map);
+
+function save(){
+ localStorage.setItem('nordicTrailPointsReportPreview',JSON.stringify(points));
+ render();
+}
+async function loadPublicPoints(){
+  const list=document.getElementById('publicPoints');
+  const {data,error}=await db.from('map_points').select('id,kind,status,note,lat,lon,created_at,review_status')    .eq('review_status', 'approved').limit(500);
+  if(error){console.error('Błąd pobierania punktów:',error.message);list.textContent='Nie udało się pobrać punktów publicznych.';return;}
+publicPoints=(data||[]).filter(p=>p.review_status==='approved'&&Number.isFinite(Number(p.lat))&&Number.isFinite(Number(p.lon)));
+  list.textContent=publicPoints.length ? `Punkty publiczne: ${publicPoints.length}. Można je przeglądać, ale nie edytować.` : 'Brak punktów publicznych.';
+  render();
+}
+async function loadMyPendingPoints() {
+  if (!currentUser) {
+    myPendingPoints = [];
+    return;
+  }
+const requestedUserId = currentUser.id;
+  const { data, error } = await db
+    .from('map_points')
+    .select('id,kind,status,note,lat,lon,created_at,review_status')
+    .eq('user_id', requestedUserId)
+    
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Błąd pobierania zgłoszeń:', error.message);
+    return;
+  }
+
+  myPendingPoints = data || [];
+  const list = document.getElementById('myPendingPoints');
+list.replaceChildren();
+
+if (myPendingPoints.length === 0) {
+  list.textContent = 'Brak zgłoszeń w historii.';
+} else {
+  myPendingPoints.forEach(p => {
+    const item = document.createElement('p');
+    const kindName = {
+      gate: 'Szlaban',
+      closed: 'Droga zamknięta',
+      place: 'Ciekawe miejsce'
+    };
+
+    const statusName = {
+  pending: 'Oczekuje na weryfikację',
+  approved: 'Zatwierdzone',
+  rejected: 'Odrzucone'
+};
+
+item.textContent =
+  `${kindName[p.kind] || 'Punkt'} — ${p.status} — ${statusName[p.review_status] || 'Status nieznany'}`;
+  
+
+    list.appendChild(item);
+  });
+}
+}
+function render(){
+ markers.clearLayers();
+ const list=document.getElementById('points');
+ list.replaceChildren();
+ if(!points.length && !publicPoints.length){
+   list.textContent='Brak punktów. Dotknij mapy, aby dodać pierwszy.';
+   return;
+ }
+points.forEach((p,i)=>{
+  
+
+  
+const icons={gate:'🚧',closed:'⛔',place:'🌲'};
+   const statusColors={
+  gate:{
+    'Otwarty':'#22c55e',
+    'Zamknięty':'#ef4444',
+    'Nieznany':'#eab308'
+  }
+};
+const statusColor=statusColors[p.kind]?.[p.status];
+const icon=L.divIcon({
+  className:'',
+  html:`<div style="width:38px;height:38px;border:3px solid ${statusColor || 'white'};border-radius:50%;background:#172720;display:flex;align-items:center;justify-content:center;font-size:21px;box-shadow:0 2px 8px #000">${icons[p.kind]||'📍'}</div>`,
+  iconSize:[38,38],
+  iconAnchor:[19,19]
+});
+const marker=L.marker([p.lat,p.lon],{icon}).addTo(markers);
+
+   const popup=document.createElement('div');
+   const title=document.createElement('strong');
+   title.textContent=labels[p.kind];
+   popup.appendChild(title);
+   const desc=document.createElement('p');
+   desc.textContent=p.note||'Bez opisu';
+   popup.appendChild(desc);
+   
+if(p.status){
+  const statusInfo=document.createElement('p');
+  statusInfo.textContent='Status: '+p.status;
+  popup.appendChild(statusInfo);
+}
+if(p.date){
+  const dateInfo=document.createElement('div');
+  dateInfo.textContent='Zgłoszono: '+
+    new Date(p.date).toLocaleString('pl-PL');
+  popup.appendChild(dateInfo);
+}
+
+if(p.updatedAt){
+  const updateInfo=document.createElement('div');
+  updateInfo.textContent='Zaktualizowano: '+
+    new Date(p.updatedAt).toLocaleString('pl-PL');
+  popup.appendChild(updateInfo);
+}
+
+   const coords=document.createElement('div');
+   coords.textContent=p.lat.toFixed(5)+', '+p.lon.toFixed(5);
+   popup.appendChild(coords);
+   
+const popupEdit=document.createElement('button');
+popupEdit.textContent='Zmień status';
+popupEdit.style.cssText='display:block;margin-top:12px;padding:9px;cursor:pointer;';
+popupEdit.onclick=()=>{
+  const options=statuses[p.kind];
+  const choice=prompt(
+    'Aktualny status: '+(p.status||'Brak')+'\n\n'+
+    options.map((s,i)=>(i+1)+'. '+s).join('\n')+
+    '\n\nWpisz numer nowego statusu:'
+  );
+  if(choice===null)return;
+  const index=Number(choice)-1;
+  if(!Number.isInteger(index)||!options[index]){
+    alert('Nieprawidłowy numer statusu');
+    return;
+  }
+  p.status=options[index];
+  p.updatedAt=new Date().toISOString();
+  save();
+  render();
+};
+popup.appendChild(popupEdit);
+
+   marker.bindPopup(popup);
+
+   const row=document.createElement('div');
+   row.style.cssText='padding:9px 0;border-bottom:1px solid #35483c';
+   const text=document.createElement('div');
+   text.textContent=(i+1)+'. '+labels[p.kind]+
+  ' — '+(p.note||'Bez opisu')+
+  ' | Status: '+(p.status||'Brak danych');
+   row.appendChild(text);
+   
+const edit=document.createElement('button');
+edit.className='secondary';
+edit.textContent='Zmień status';
+edit.onclick=()=>{
+  const options=statuses[p.kind];
+  const choice=prompt(
+    'Aktualny status: '+(p.status||'Brak')+'\n\n'+
+    options.map((s,i)=>(i+1)+'. '+s).join('\n')+
+    '\n\nWpisz numer nowego statusu:'
+  );
+  if(choice===null)return;
+  const index=Number(choice)-1;
+  if(!Number.isInteger(index)||!options[index]){
+    alert('Nieprawidłowy numer statusu');
+    return;
+  }
+  p.status=options[index];
+  
+p.updatedAt=new Date().toISOString();
+
+  save();
+  render();
+};
+row.appendChild(edit);
+
+   const del=document.createElement('button');
+   del.className='secondary';
+   del.textContent='Usuń punkt';
+   del.onclick=()=>{points.splice(i,1);save()};
+   row.appendChild(del);
+   list.appendChild(row);
+ });
+// Punkty publiczne są tylko do odczytu; nigdy nie trafiają do lokalnej listy edycji.
+publicPoints.forEach(p=>{
+  const lat=Number(p.lat),lon=Number(p.lon);
+  const icons={gate:'🚧',closed:'⛔',place:'🌲'};
+  const icon=L.divIcon({className:'',html:`<div style="width:34px;height:34px;border:2px solid #9ec5ed;border-radius:50%;background:#172720;display:flex;align-items:center;justify-content:center;font-size:20px">${icons[p.kind]||'📍'}</div>`,iconSize:[34,34],iconAnchor:[17,17]});
+  const popup=document.createElement('div');
+  const title=document.createElement('strong');title.textContent='Punkt publiczny: '+(labels[p.kind]||'Punkt');popup.appendChild(title);
+  const desc=document.createElement('p');desc.textContent=p.note||'Bez opisu';popup.appendChild(desc);
+  const status=document.createElement('p');status.textContent='Status: '+(p.status||'Brak danych');popup.appendChild(status);
+  const reportBtn = document.createElement('button');
+reportBtn.textContent = 'Zgłoś zmianę';
+reportBtn.className = 'secondary';
+
+reportBtn.onclick = async () => {
+  if (!currentUser) {
+    alert('Zaloguj się, aby zgłosić zmianę.');
+    return;
+  }
+
+  // Osobne zgłoszenia dla szlabanu i fizycznie zablokowanej drogi.
+// Nie oznaczają automatycznie legalnego przejazdu.
+const reportOptions = p.kind === 'gate' ? [
+  ['gate_removed', 'Szlabanu już nie ma (został fizycznie usunięty)'],
+  ['gate_status', 'Zmiana stanu bramy lub szlabanu'],
+  ['closure_risk', 'Ryzyko zamknięcia drogi'],
+  ['private_road', 'Droga prywatna lub ograniczony dostęp'],
+  ['incorrect_info', 'Nieprawidłowe informacje'],
+  ['other', 'Inna zmiana']
+] : [
+  ['road_unblocked', 'Droga została fizycznie odblokowana'],
+  ['closure_risk', 'Ryzyko ponownego zamknięcia drogi'],
+  ['private_road', 'Droga prywatna lub ograniczony dostęp'],
+  ['incorrect_info', 'Nieprawidłowe informacje'],
+  ['other', 'Inna zmiana']
+];
+
+const choice = prompt(
+  'Co chcesz zgłosić?\n' +
+  reportOptions.map(([type, label], i) => (i + 1) + '. ' + label).join('\n') +
+  '\n\nWpisz numer od 1 do ' + reportOptions.length + ':' +
+  '\nZgłoszenie wymaga weryfikacji i nie oznacza zgody na przejazd.'
+);
+
+if (choice === null) return;
+const chosenNumber = choice.trim();
+const index = /^\d+$/.test(chosenNumber) ? Number(chosenNumber) - 1 : -1;
+const reportType = reportOptions[index]?.[0];
+
+if (!reportType) {
+  alert('Nieprawidłowy numer zgłoszenia.');
+  return;
+}
+
+  const reportNote = prompt(
+  'Opisz zauważoną zmianę (minimum 10 znaków):'
+);
+
+if (reportNote === null) return;
+
+if (reportNote.trim().length < 10) {
+  alert('Opis musi mieć co najmniej 10 znaków.');
+  return;
+}
+  const { error } = await db.from('point_reports').insert({
+    point_id: p.id,
+    report_type: reportType,
+    note: reportNote
+  });
+
+  if (error) {
+  if (error.code === '23505') {
+    alert('Takie zgłoszenie oczekuje już na weryfikację.');
+  } else {
+    alert('Nie udało się wysłać zgłoszenia. Spróbuj ponownie później.');
+    console.error('Błąd zgłoszenia:', error);
+  }
+  return;
+}
+
+  alert('Zgłoszenie przesłane do weryfikacji.');
+};
+
+if (p.kind === 'gate' || p.kind === 'closed') {
+  popup.appendChild(reportBtn);
+}
+  L.marker([lat,lon],{icon}).bindPopup(popup).addTo(markers);
+});
+}
+map.on('click', async e=>{
+ const kind=document.getElementById('kind').value;
+ const note=document.getElementById('note').value.trim();
+ 
+const status=prompt(
+  'Wybierz status:\n'+
+  statuses[kind].map((s,i)=>(i+1)+'. '+s).join('\n')+
+  '\n\nWpisz numer statusu:'
+);
+if(status===null)return;
+const statusIndex=Number(status)-1;
+if(!Number.isInteger(statusIndex) || !statuses[kind][statusIndex]){
+  alert('Nieprawidłowy numer statusu');
+  return;
+}
+points.push({
+  kind,note,
+  status:statuses[kind][statusIndex],
+  date:new Date().toISOString(),
+  lat:Number(e.latlng.lat.toFixed(6)),
+  lon:Number(e.latlng.lng.toFixed(6))
+});
+  const newPoint = points[points.length - 1];
+  const { data: { user }, error: authError } = await db.auth.getUser();
+
+  if (authError || !user) {
+    alert('Punkt zapisano lokalnie. Zaloguj się, aby opublikować go na wspólnej mapie.');
+  } else {
+  const { error: insertError } = await db
+  .from('map_points')
+  .insert({
+    kind: newPoint.kind,
+    status: newPoint.status,
+    note: newPoint.note,
+    lat: newPoint.lat,
+    lon: newPoint.lon
+  });
+
+if (insertError) {
+  console.error('Błąd publikowania:', insertError);
+  alert('Punkt zapisano lokalnie, ale nie udało się go opublikować.');
+} else {
+  alert('Punkt przesłany do weryfikacji. Będzie widoczny publicznie po zatwierdzeniu.');
+  await loadPublicPoints();
+}
+}
+ document.getElementById('note').value='';
+ save();
+});
+document.getElementById('clear').onclick=()=>{
+ if(confirm('Usunąć wszystkie zapisane punkty?')){
+   points=[];save();
+ }
+};
+document.getElementById('export').onclick=()=>{
+ const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+ const wpts=points.map(p=>
+  `<wpt lat="${p.lat}" lon="${p.lon}"><name>${esc(labels[p.kind])}</name><desc>${esc(p.note||'')}</desc></wpt>`
+ ).join('\n');
+ const xml=`<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="NORDIC TRAIL" xmlns="http://www.topografix.com/GPX/1/1">
+${wpts}
+</gpx>`;
+ const url=URL.createObjectURL(new Blob([xml],{type:'application/gpx+xml'}));
+ const a=document.createElement('a');
+ a.href=url;a.download='nordic-trail.gpx';a.click();
+ setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
+// NORDIC TRAIL - logowanie e-mail i haslo
+
+const loginEmail = document.getElementById('loginEmail');
+
+const loginBtn = document.getElementById('loginBtn');
+const logoutBtn = document.getElementById('logoutBtn');
+const authStatus = document.getElementById('authStatus');
+
+function updateAuthUI(user) {
+    currentUser = user;
+  if (user) {
+  loadMyPendingPoints();
+} else {
+  myPendingPoints = [];
+    document.getElementById('myPendingPoints').textContent = 'Zaloguj się, aby zobaczyć swoje zgłoszenia.';
+}
+  if (user) {
+    authStatus.textContent = 'Zalogowano: ' + user.email;
+    loginEmail.style.display = 'none';
+    
+    loginBtn.style.display = 'none';
+    logoutBtn.style.display = 'block';
+  } else {
+    authStatus.textContent = 'Nie jesteś zalogowany';
+    loginEmail.style.display = 'block';
+    
+    loginBtn.style.display = 'block';
+    logoutBtn.style.display = 'none';
+  }
+}
+loginBtn.onclick = async () => {
+  const email = loginEmail.value.trim();
+  
+  if (!email) {
+    authStatus.textContent = 'Wpisz adres e-mail.';
+    return;
+  }
+
+  loginBtn.disabled = true;
+  authStatus.textContent = 'Trwa logowanie...';
+
+  const { error } = await db.auth.signInWithOtp({
+  email,
+  options: {
+    emailRedirectTo: 'https://nordic-trail.github.io/nordic-trail-admin-preview/report-form-preview/'
+  }
+});
+
+  if (error) {
+  loginBtn.disabled = false;
+
+  if (error.status === 429 ||
+      error.code === 'over_email_send_rate_limit') {
+    authStatus.textContent =
+      'Limit wiadomości e-mail został osiągnięty. Spróbuj ponownie później.';
+  } else {
+    authStatus.textContent = 'Błąd: ' + error.message;
+      }
+  
+} else {
+
+  authStatus.textContent =
+    'Sprawdź pocztę e-mail i kliknij link logowania.';
+
+  // Blokada ponownego wysłania linku przez 60 sekund
+  loginBtn.disabled = true;
+
+  setTimeout(() => {
+    loginBtn.disabled = false;
+  }, 60000);
+  }
+};
+
+logoutBtn.onclick = async () => {
+  const { error } = await db.auth.signOut();
+
+  if (error) {
+    authStatus.textContent = 'Nie udało się wylogować.';
+  }
+};
+
+db.auth.onAuthStateChange((_event, session) => {
+  updateAuthUI(session?.user ?? null);
+});
+
+db.auth.getUser().then(({ data, error }) => {
+  if (!error) updateAuthUI(data.user);
+});
+  render();
+  loadPublicPoints();
+</script>
+</body>
+</html>
