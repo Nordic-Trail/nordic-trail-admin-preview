@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>NORDIC TRAIL — Admin Preview</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{color-scheme:dark;font-family:system-ui,Arial,sans-serif}
+*{box-sizing:border-box}body{margin:0;background:#101b17;color:#f2f0e7}
+header{background:#172720;border-bottom:1px solid #364a3c;padding:20px 16px}
+.brand{font-size:clamp(20px,5vw,28px);font-weight:800;letter-spacing:3px}
+.subtitle{font-size:12px;color:#b4c2b2;margin-top:6px}
+main{max-width:920px;margin:auto;padding:16px}
+section{padding:16px;margin:16px 0;border:1px solid #536657;border-radius:12px;background:#1b2a21}
+[hidden]{display:none!important}
+h2{font-size:19px;margin:0 0 14px}p{line-height:1.5}
+.hint{color:#bbcabd;font-size:13px}
+.warning{border-left:4px solid #d9ad54;background:#2b3022;padding:10px 12px;border-radius:4px}
+input,button{font:inherit;width:100%;padding:12px;border-radius:9px;border:1px solid #536657;margin:5px 0}
+input{background:#142019;color:#fff}
+button{background:#b7c58b;border:0;color:#172219;font-weight:700;cursor:pointer}
+button.secondary{background:#314338;color:#fff;border:1px solid #536657}
+button.reject{background:#d99889;color:#23130e}
+button:disabled{opacity:.55;cursor:not-allowed}
+button:focus-visible,input:focus-visible{outline:3px solid #dcb763;outline-offset:2px}
+.point{border-top:1px solid #42574a;padding:12px 0}
+.point p{margin:7px 0;overflow-wrap:anywhere}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.actions button{margin:0}
+#map{height:40vh;min-height:280px;border:1px solid #536657;border-radius:11px}
+footer{color:#91a495;font-size:12px;text-align:center;padding:20px}
+</style>
+</head>
+<body>
+<header><div class="brand">NORDIC TRAIL</div><div class="subtitle">ADMIN PREVIEW — TESTY PANELU</div></header>
+<main>
+<p class="warning"><strong>Uwaga:</strong> to wersja testowa interfejsu, ale zatwierdzanie i odrzucanie naprawdę zmienia punkty w istniejącej bazie Supabase. Nie zatwierdzaj fikcyjnych punktów.</p>
+<section id="authSection">
+<h2>Logowanie administratora</h2>
+<div id="loginSection">
+<label for="loginEmail">Adres e-mail</label>
+<input id="loginEmail" type="email" autocomplete="email" placeholder="Adres e-mail" maxlength="254">
+<button id="loginButton" type="button">Wyślij link logowania</button>
+</div>
+<div id="userSection" hidden>
+<p id="loggedInEmail"></p>
+<button id="logoutButton" type="button" class="secondary">Wyloguj się</button>
+</div>
+<p class="hint" id="authMessage" role="status" aria-live="polite">Sprawdzanie sesji…</p>
+</section>
+<section id="adminSection" hidden>
+<h2>Oczekujące punkty</h2>
+<button id="refreshButton" type="button" class="secondary">Odśwież listę</button>
+<p id="queueMessage" class="hint" role="status" aria-live="polite"></p>
+<div id="queue"></div>
+<h2 style="margin-top:22px">Podgląd na mapie</h2>
+<div id="map"></div>
+<p class="hint">Wybierz „Pokaż na mapie” przy punkcie. Widok mapy nie ujawnia punktów innym użytkownikom.</p>
+</section>
+</main>
+<footer>NORDIC TRAIL — Testy administratora · OpenStreetMap contributors</footer>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+"use strict";
+const SUPABASE_URL = "https://kwhkxedmtehqplvnmjka.supabase.co";
+const SUPABASE_KEY = "sb_publishable_9NwkykVx5UuNhnyPlD5vFw_t7zfqSvE";
+const PREVIEW_URL = "https://nordic-trail.github.io/nordic-trail-admin-preview/";
+const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+const el=(id)=>document.getElementById(id);
+const map=L.map('map').setView([62.2,15.2],5);
+map.attributionControl.setPrefix('');
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  maxZoom:19,attribution:'© OpenStreetMap contributors'
+}).addTo(map);
+const reviewMarkers=L.layerGroup().addTo(map);
+const kindLabels={gate:'Brama / szlaban',closed:'Droga zamknięta',place:'Ciekawe miejsce'};
+let currentUser=null;
+let requestSeq=0;
+let saving=false;
+function text(tag,value,cls){
+ const node=document.createElement(tag);
+ node.textContent=String(value??'');
+ if(cls)node.className=cls;
+ return node;
+}
+function clearAdmin(){
+ requestSeq++;
+ el('adminSection').hidden=true;
+ el('queue').replaceChildren();
+ el('queueMessage').textContent='';
+ reviewMarkers.clearLayers();
+}
+function updateAuth(user){
+ const oldId=currentUser?.id;
+ currentUser=user||null;
+ el('loginSection').hidden=!!currentUser;
+ el('userSection').hidden=!currentUser;
+ el('loggedInEmail').textContent=currentUser?'Zalogowano: '+(currentUser.email||'konto użytkownika'):'';
+ el('authMessage').textContent=currentUser?'Sprawdzanie uprawnień administratora…':'Zaloguj się, aby sprawdzić dostęp.';
+ if(!currentUser)clearAdmin();
+ else if(oldId!==currentUser.id)void loadPending();
+}
+function validPosition(point){
+ const lat=Number(point.lat),lon=Number(point.lon);
+ if(!Number.isFinite(lat)||!Number.isFinite(lon)||lat < -90||lat > 90||lon < -180||lon > 180)return null;
+ return [lat,lon];
+}
+function showOnMap(point){
+ const coords=validPosition(point);
+ if(!coords){el('queueMessage').textContent='Nieprawidłowe współrzędne.';return;}
+ map.setView(coords,13);
+ for(const marker of Object.values(reviewMarkers._layers||{})){
+   if(marker.options.pointId===String(point.id))marker.openPopup();
+ }
+ el('map').scrollIntoView({behavior:'smooth',block:'center'});
+}
+function renderQueue(points){
+ const queue=el('queue');
+ queue.replaceChildren();
+ reviewMarkers.clearLayers();
+ if(points.length===0){queue.appendChild(text('p','Brak punktów oczekujących na moderację.','hint'));return;}
+ for(const point of points){
+   const card=document.createElement('article');
+   card.className='point';
+   card.appendChild(text('strong',(kindLabels[point.kind]||'Punkt')+' — ID '+point.id));
+   card.appendChild(text('p','Status miejsca: '+(point.status||'Brak danych')));
+   card.appendChild(text('p','Opis: '+(point.note||'Bez opisu')));
+   const pos=validPosition(point);
+   if(pos){
+     card.appendChild(text('p','Współrzędne: '+pos[0].toFixed(5)+', '+pos[1].toFixed(5),'hint'));
+     const marker=L.circleMarker(pos,{radius:10,color:'#e5b65c',weight:3,pointId:String(point.id)}).addTo(reviewMarkers);
+     const popup=document.createElement('div');
+     popup.appendChild(text('strong','Punkt ID '+point.id));
+     popup.appendChild(text('p',point.note||'Bez opisu'));
+     marker.bindPopup(popup);
+     const view=document.createElement('button');
+     view.className='secondary';view.type='button';
+     view.textContent='Pokaż na mapie';view.onclick=()=>showOnMap(point);
+     card.appendChild(view);
+   }else card.appendChild(text('p','Błędne współrzędne.','hint'));
+   const actions=document.createElement('div');actions.className='actions';
+   for(const [decision,label] of [['approved','Zatwierdź'],['rejected','Odrzuć']]){
+     const btn=document.createElement('button');
+     btn.type='button';btn.textContent=label;
+     if(decision==='rejected')btn.className='reject';
+     btn.onclick=()=>moderate(point,decision);
+     actions.appendChild(btn);
+   }
+   card.appendChild(actions);queue.appendChild(card);
+ }
+}
+async function loadPending(){
+ const userId=currentUser?.id;
+ if(!userId){clearAdmin();return;}
+ const seq=++requestSeq;
+ el('queueMessage').textContent='Pobieranie kolejki…';
+ el('refreshButton').disabled=true;
+ try{
+   const {data,error}=await db.rpc('admin_pending_map_points');
+   if(seq!==requestSeq||currentUser?.id!==userId)return;
+   if(error)throw error;
+   if(!Array.isArray(data))throw new Error('Nieprawidłowy format odpowiedzi');
+   el('adminSection').hidden=false;
+   el('authMessage').textContent='Uprawnienia administratora zweryfikowane przez Supabase.';
+   el('queueMessage').textContent='Oczekujące punkty: '+data.length;
+   renderQueue(data);
+   requestAnimationFrame(()=>map.invalidateSize());
+ }catch(error){
+   if(seq!==requestSeq||currentUser?.id!==userId)return;
+   clearAdmin();
+   const accessDenied=String(error?.message||'').includes('Brak uprawnień administratora');
+   el('authMessage').textContent=accessDenied?'Brak uprawnień administratora. Panel jest niedostępny.':'Nie udało się pobrać danych. Sprawdź sesję lub połączenie.';
+   console.error('RPC kolejki:',error);
+ }finally{
+   if(seq===requestSeq)el('refreshButton').disabled=saving;
+ }
+}
+async function moderate(point,decision){
+ if(!currentUser||saving||el('adminSection').hidden)return;
+ const pointId=Number(point.id);
+ if(!Number.isSafeInteger(pointId)||pointId<=0)return;
+ const verb=decision==='approved'?'zatwierdzić':'odrzucić';
+ if(!confirm('Czy na pewno chcesz '+verb+' punkt ID '+pointId+'? Decyzja zapisze się w Supabase.'))return;
+ saving=true;
+ el('refreshButton').disabled=true;
+ el('queue').querySelectorAll('button').forEach(b=>b.disabled=true);
+ el('queueMessage').textContent='Zapisywanie decyzji…';
+ try{
+   const {error}=await db.rpc('moderate_map_point',{p_point_id:pointId,p_decision:decision});
+   if(error)throw error;
+   await loadPending();
+   if(!el('adminSection').hidden)el('queueMessage').textContent='Decyzja zapisana. Lista odświeżona.';
+ }catch(error){
+   console.error('Błąd moderacji:',error);
+   if(!el('adminSection').hidden)el('queueMessage').textContent='Nie udało się zapisać decyzji. Sprawdź dane w Supabase.';
+ }finally{
+   saving=false;el('refreshButton').disabled=false;
+   el('queue').querySelectorAll('button').forEach(b=>b.disabled=false);
+ }
+}
+el('refreshButton').onclick=()=>{if(!saving)void loadPending();};
+el('loginButton').onclick=async()=>{
+ const email=el('loginEmail').value.trim();
+ if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+   el('authMessage').textContent='Wpisz poprawny adres e-mail.';return;
+ }
+ el('loginButton').disabled=true;
+ el('authMessage').textContent='Wysyłanie linku…';
+ try{
+   const {error}=await db.auth.signInWithOtp({email,options:{emailRedirectTo:PREVIEW_URL}});
+   if(error)throw error;
+   el('authMessage').textContent='Sprawdź pocztę i otwórz link logowania. Adres preview musi być dodany w Supabase Redirect URLs.';
+ }catch(error){
+   console.error('Logowanie:',error);
+   el('authMessage').textContent='Nie udało się wysłać linku. Spróbuj ponownie później.';
+ }finally{el('loginButton').disabled=false;}
+};
+el('logoutButton').onclick=async()=>{
+ el('logoutButton').disabled=true;
+ const {error}=await db.auth.signOut();
+ el('logoutButton').disabled=false;
+ if(error)el('authMessage').textContent='Nie udało się wylogować.';
+};
+db.auth.onAuthStateChange((_event,session)=>{
+ Promise.resolve().then(()=>updateAuth(session?.user??null));
+});
+db.auth.getUser().then(({data,error})=>{
+ if(error)updateAuth(null);else updateAuth(data.user||null);
+}).catch(error=>{console.error('Sesja:',error);updateAuth(null);});
+</script>
+</body>
+</html>
