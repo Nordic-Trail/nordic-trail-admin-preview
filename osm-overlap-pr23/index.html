@@ -125,7 +125,7 @@ function render(){
    const lon=entries.reduce((sum,e)=>sum+e.p.lon,0)/entries.length;
    const icon=L.divIcon({className:'',html:'<div class="nt-osm-cluster" aria-hidden="true">'+entries.length+'</div>',iconSize:[42,42],iconAnchor:[21,21]});
    const marker=L.marker([lat,lon],{icon,pane:'ntPreviewOsmPane',bubblingMouseEvents:false,keyboard:true,
-     title:map.getZoom()>=16?'Dotknij, aby rozsunąć '+entries.length+' pinezki OSM':'Dotknij, aby przybliżyć grupę OSM'};
+     title:map.getZoom()>=16?'Dotknij, aby rozsunąć '+entries.length+' pinezki OSM':'Dotknij, aby przybliżyć grupę OSM'});
    marker.on('click',event=>{
      if(event.originalEvent)L.DomEvent.stopPropagation(event.originalEvent);
      if(map.getZoom()>=16)showSpider(entries,marker,lat,lon);
