@@ -30,8 +30,14 @@ button:focus-visible,input:focus-visible{outline:3px solid #f0cf7d;outline-offse
 .nt-pin{position:relative;width:42px;height:44px;filter:drop-shadow(0 2px 3px #06130e9a);pointer-events:none}
 .nt-pin:before{content:"";position:absolute;left:7px;top:3px;width:28px;height:28px;border:2px solid #fff;box-sizing:border-box;border-radius:50% 50% 50% 0;background:var(--pin);transform:rotate(-45deg)}
 .nt-pin span{position:absolute;top:2px;left:7px;width:28px;height:28px;display:grid;place-items:center;font-size:16px;font-weight:900;color:#fff;text-shadow:0 1px 2px #041309}
-.nt-pin.osm{opacity:.78}.nt-pin.barrier{--pin:#95612d}.nt-pin.road{--pin:#793d24}.nt-pin.walk{--pin:#295c7d}.nt-pin.bike{--pin:#295c7d}.nt-pin.trail{--pin:#295c7d}
-.nt-pin.nt-gate{--pin:#bb8b38}.nt-pin.nt-closed{--pin:#bd5149}.nt-pin.nt-place{--pin:#5b8f55}
+.nt-pin .symbol-svg{width:20px;height:20px;stroke:#fff;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;fill:none;filter:drop-shadow(0 1px 1px #071d28)}
+.nt-pin.osm.bike{opacity:.93;--pin:#15557d}.nt-pin.bike .symbol-svg{width:19px;height:19px;stroke-width:2.65}
+.nt-symbol{display:flex!important;align-items:flex-start!important;justify-content:center;padding-top:1px}
+.nt-symbol .symbol-svg{height:18px;width:18px;stroke-width:2.5}
+.nt-symbol em{position:absolute;bottom:2px;left:0;right:0;font:bold normal 8px/1 system-ui,sans-serif;text-align:center}
+#demo{width:100%;margin-top:8px;background:#2d543b}
+.nt-pin.osm{opacity:.82}.nt-pin.barrier{--pin:#95612d}.nt-pin.road{--pin:#793d24}.nt-pin.walk{--pin:#295c7d}.nt-pin.bike{--pin:#295c7d}.nt-pin.trail{--pin:#295c7d}
+.nt-pin.nt-gate{--pin:#af3930}.nt-pin.nt-closed{--pin:#a8312e}.nt-pin.nt-place{--pin:#286d38}.nt-pin.nt-parking{--pin:#205b86}
 .legend-pin{display:inline-block;vertical-align:middle;position:relative;width:31px;height:32px;flex:0 0 31px}
 .legend-pin .nt-pin{transform:scale(.72);transform-origin:top left}
 .cluster{display:grid;place-items:center;width:42px;height:42px;border-radius:50%;background:rgba(18,42,29,.42);border:2px solid #ecf5e8;color:#fff;font-size:15px;font-weight:800;backdrop-filter:blur(3px)}
@@ -43,27 +49,27 @@ button:focus-visible,input:focus-visible{outline:3px solid #f0cf7d;outline-offse
 </head>
 <body>
 <div id="map"></div>
-<div class="brand"><strong>NORDIC TRAIL</strong><small>KONCEPCJA IKON • BEZ ZAPISU</small></div>
+<div class="brand"><strong>NORDIC TRAIL</strong><small>KONCEPCJA IKON v2 • BEZ ZAPISU</small></div>
 <div class="panel" id="panel">
  <div class="panel-head"><h1>Legenda mapy</h1><button id="collapse" type="button" aria-controls="panel-body" aria-expanded="true">Zwiń</button></div>
  <div id="panel-body">
   <h2>OSM <span class="pill">dane źródłowe</span></h2>
   <div class="row"><span class="legend-pin"><span class="nt-pin osm barrier"><span>!</span></span></span>Szlaban / przeszkoda</div>
   <div class="row"><span class="legend-pin"><span class="nt-pin osm road"><span>?</span></span></span>Tag ograniczenia drogi</div>
-  <div class="row"><span class="legend-pin"><span class="nt-pin osm walk"><span>🚶</span></span></span>Footway — piesza</div>
-  <div class="row"><span class="legend-pin"><span class="nt-pin osm bike"><span>🚲</span></span></span>Cycleway — rowerowa</div>
-  <div class="row"><span class="legend-pin"><span class="nt-pin osm trail"><span>≋</span></span></span>Path — typ nieustalony</div>
+  <div class="row"><span class="legend-pin"><span class="nt-pin osm walk"><span><svg class="symbol-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="4.5" r="2" fill="white" stroke="none"/><path d="M10 9l-1.5 5 4 2 1.5 5M10 9l4 2 2.5 5M14 11l-1.5-3M8.5 14L6 19"/></svg></span></span></span>Ścieżka piesza</div>
+  <div class="row"><span class="legend-pin"><span class="nt-pin osm bike"><span><svg class="symbol-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="17.5" r="3.2"/><circle cx="18.5" cy="17.5" r="3.2"/><path d="M5.5 17.5l4.2-9h4.5l4.3 9h-6.8L9.7 8.5M8.7 6h3M15.5 6.5H18"/></svg></span></span></span>Trasa rowerowa</div>
+  <div class="row"><span class="legend-pin"><span class="nt-pin osm trail"><span><svg class="symbol-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20c0-5 12-4 12-9s-8-3-8-7"/><circle cx="16" cy="5" r="1.7" fill="white" stroke="none"/></svg></span></span></span>Ścieżka — rodzaj nieustalony</div>
   <p>Oznaczenia wynikają z tagów OSM; nie potwierdzają legalnego dostępu ani przejezdności.</p>
   <h2>NORDIC TRAIL <span class="pill">projekt ikon</span></h2>
-  <div class="row"><span class="legend-pin"><span class="nt-pin nt-gate"><span>NT</span></span></span>Szlaban — status użytkowników</div>
-  <div class="row"><span class="legend-pin"><span class="nt-pin nt-closed"><span>NT</span></span></span>Droga — status użytkowników</div>
-  <div class="row"><span class="legend-pin"><span class="nt-pin nt-place"><span>NT</span></span></span>Miejsce — status użytkowników</div>
-  <p>Ikony NT są propozycją w legendzie — nie nanosimy fikcyjnych punktów na mapę. Moderacja nie oznacza kontroli terenowej.</p>
+  <div class="row"><span class="legend-pin"><span class="nt-pin nt-gate"><span class="nt-symbol"><svg class="symbol-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V7M5 9h14M18 9v4M8 8l2 2M13 8l2 2"/></svg><em>NT</em></span></span></span>Szlaban — Otwarty / Zamknięty / Nieznany</div>
+  <div class="row"><span class="legend-pin"><span class="nt-pin nt-closed"><span class="nt-symbol"><svg class="symbol-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="10" r="7"/><path d="M7.5 10h9"/></svg><em>NT</em></span></span></span>Droga — Przejezdna / Nieprzejezdna / Do sprawdzenia</div>
+  <div class="row"><span class="legend-pin"><span class="nt-pin nt-place"><span class="nt-symbol"><svg class="symbol-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3L7 11h3l-4 5h12l-4-5h3zM12 16v4"/></svg><em>NT</em></span></span></span>Miejsce — Dostępne / Niedostępne</div>
+  <p>Ikony NT są propozycją w legendzie — nie nanosimy fikcyjnych punktów na mapę. Moderacja nie oznacza kontroli terenowej.</p><h2>Planowane — poza MVP</h2><div class="row"><span class="legend-pin"><span class="nt-pin nt-parking"><span>P</span></span></span>Parking — tylko dla parkingów</div>
   <h2>Filtry danych OSM</h2>
   <label class="option"><input id="barrier" type="checkbox" checked> Szlabany (29)</label>
   <label class="option"><input id="road" type="checkbox" checked> Drogi (26)</label>
   <label class="option"><input id="path" type="checkbox" checked> Ścieżki (11)</label>
-  <button id="region" type="button">Pokaż Tumba–Lida</button>
+  <button id="region" type="button">Pokaż Tumba–Lida</button><button id="demo" type="button">Przetestuj bliskie pinezki — zoom 16</button>
   <p><strong>P</strong> zostawiamy wyłącznie dla parkingów, których nie ma w tej paczce. Parking nie jest nową kategorią MVP.</p>
  </div>
 </div>
@@ -89,11 +95,16 @@ else{
    toggle.setAttribute('aria-expanded',String(!collapsed));
  });
  document.getElementById('region').addEventListener('click',()=>map.fitBounds([[59.155,17.81],[59.203,17.875]],{padding:[18,18],maxZoom:13}));
+ document.getElementById('demo').addEventListener('click',()=>{
+   map.closePopup();ui.classList.add('collapsed');toggle.textContent='Rozwiń';toggle.setAttribute('aria-expanded','false');
+   map.setView([59.2017709,17.8253088],16,{animate:false});
+ });
+ const svgWalk="<svg class=\"symbol-svg\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"4.5\" r=\"2\" fill=\"white\" stroke=\"none\"/><path d=\"M10 9l-1.5 5 4 2 1.5 5M10 9l4 2 2.5 5M14 11l-1.5-3M8.5 14L6 19\"/></svg>",svgBike="<svg class=\"symbol-svg\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"5.5\" cy=\"17.5\" r=\"3.2\"/><circle cx=\"18.5\" cy=\"17.5\" r=\"3.2\"/><path d=\"M5.5 17.5l4.2-9h4.5l4.3 9h-6.8L9.7 8.5M8.7 6h3M15.5 6.5H18\"/></svg>",svgTrail="<svg class=\"symbol-svg\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 20c0-5 12-4 12-9s-8-3-8-7\"/><circle cx=\"16\" cy=\"5\" r=\"1.7\" fill=\"white\" stroke=\"none\"/></svg>";
  function classify(p){
    if(p.kind==='barrier')return {layer:'barrier',style:'barrier',symbol:'!'};
    if(['footway','cycleway','path'].includes(p.tags.highway)){
      const highway=p.tags.highway;
-     return highway==='footway'?{layer:'path',style:'walk',symbol:'🚶'}:highway==='cycleway'?{layer:'path',style:'bike',symbol:'🚲'}:{layer:'path',style:'trail',symbol:'≋'};
+     return highway==='footway'?{layer:'path',style:'walk',symbol:svgWalk}:highway==='cycleway'?{layer:'path',style:'bike',symbol:svgBike}:{layer:'path',style:'trail',symbol:svgTrail};
    }
    return {layer:'road',style:'road',symbol:'?'};
  }
