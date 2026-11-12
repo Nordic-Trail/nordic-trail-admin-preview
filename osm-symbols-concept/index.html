@@ -57,20 +57,15 @@ button:focus-visible,input:focus-visible{outline:3px solid #f0cf7d;outline-offse
 </head>
 <body>
 <div id="map"></div>
-<div class="brand"><strong>NORDIC TRAIL</strong><small>KONCEPCJA IKON v4 • BEZ ZAPISU</small></div>
+<div class="brand"><strong>NORDIC TRAIL</strong><small>WĘDROWIEC Z KIJEM • PROJEKT v5</small></div>
 <div class="panel" id="panel">
  <div class="panel-head"><h1>Legenda mapy</h1><button id="collapse" type="button" aria-controls="panel-body" aria-expanded="true">Zwiń</button></div>
  <div id="panel-body">
   <h2>OSM <span class="pill">dane źródłowe</span></h2>
   <div class="row"><span class="legend-pin"><span class="nt-pin osm barrier"><span>!</span></span></span>Szlaban / przeszkoda</div>
   <div class="row"><span class="legend-pin"><span class="nt-pin osm road"><span>?</span></span></span>Tag ograniczenia drogi</div>
-  <h2>Hiking — porównanie symbolu</h2>
-  <p>Te same rozmiary pinezek. Wybierz A lub B, aby zobaczyć symbol na mapie dla wpisów OSM z tagiem footway.</p>
-  <div class="compare" role="group" aria-label="Dwa warianty znaku hiking">
-   <label class="variant"><input type="radio" name="hiking-option" value="hiker" checked><span class="variant-icon"><span class="nt-pin osm walk"><span><svg class="symbol-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11.5" cy="3.7" r="1.9" fill="white" stroke="none"/><path d="M10.5 7L8.8 12l3.3 2.4L10 20.5M9.2 12l-3 7.8M11.2 8l3.2 2.4 2.6 1M7.8 8.4l-2.3-.7-1.2 4.1 2.4 1.1M17 10.7l2.7 10.2"/></svg></span></span></span><strong>A — wędrowiec</strong><small>Z kijem trekkingowym</small></label>
-   <label class="variant"><input type="radio" name="hiking-option" value="boot"><span class="variant-icon"><span class="nt-pin osm walk"><span><svg class="symbol-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.8 3.5h6.4v8l2.5 3.4 4 1.8v3.6H3.2v-3.6l3.4-5.7 1.2-7.5zM7.6 7h5.5M7 10h6.2M3.8 17.2h16.3"/></svg></span></span></span><strong>B — but</strong><small>But trekkingowy</small></label>
-  </div>
-  <div class="row"><span class="legend-pin"><span class="nt-pin osm walk"><span><svg class="symbol-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11.5" cy="3.7" r="1.9" fill="white" stroke="none"/><path d="M10.5 7L8.8 12l3.3 2.4L10 20.5M9.2 12l-3 7.8M11.2 8l3.2 2.4 2.6 1M7.8 8.4l-2.3-.7-1.2 4.1 2.4 1.1M17 10.7l2.7 10.2"/></svg></span></span></span>Ścieżka piesza — wybrany wariant do oceny</div>
+  <h2>Hiking — zatwierdzony symbol</h2>
+  <div class="row"><span class="legend-pin"><span class="nt-pin osm walk"><span><svg class="symbol-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11.5" cy="3.7" r="1.9" fill="white" stroke="none"/><path d="M10.5 7L8.8 12l3.3 2.4L10 20.5M9.2 12l-3 7.8M11.2 8l3.2 2.4 2.6 1M7.8 8.4l-2.3-.7-1.2 4.1 2.4 1.1M17 10.7l2.7 10.2"/></svg></span></span></span>Wędrowiec z kijem — ścieżka piesza</div>
   <div class="row"><span class="legend-pin"><span class="nt-pin osm bike"><span><svg class="symbol-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="17.5" r="3.2"/><circle cx="18.5" cy="17.5" r="3.2"/><path d="M5.5 17.5l4.2-9h4.5l4.3 9h-6.8L9.7 8.5M8.7 6h3M15.5 6.5H18"/></svg></span></span></span>Trasa rowerowa</div>
   <div class="row"><span class="legend-pin"><span class="nt-pin osm trail"><span><svg class="symbol-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20c0-5 12-4 12-9s-8-3-8-7"/><circle cx="16" cy="5" r="1.7" fill="white" stroke="none"/></svg></span></span></span>Ścieżka — rodzaj nieustalony</div>
   <p>Warianty A/B to tylko projekt grafiki. Tag <strong>footway</strong> nie jest potwierdzeniem szlaku trekkingowego ani legalności dojścia.</p><p>Oznaczenia wynikają z tagów OSM; nie potwierdzają legalnego dostępu ani przejezdności.</p>
@@ -116,23 +111,12 @@ else{
    map.setView([59.2017709,17.8253088],16,{animate:false});
  });
  const svgWalk="<svg class=\"symbol-svg\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"4.5\" r=\"2\" fill=\"white\" stroke=\"none\"/><path d=\"M10 9l-1.5 5 4 2 1.5 5M10 9l4 2 2.5 5M14 11l-1.5-3M8.5 14L6 19\"/></svg>",svgBike="<svg class=\"symbol-svg\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"5.5\" cy=\"17.5\" r=\"3.2\"/><circle cx=\"18.5\" cy=\"17.5\" r=\"3.2\"/><path d=\"M5.5 17.5l4.2-9h4.5l4.3 9h-6.8L9.7 8.5M8.7 6h3M15.5 6.5H18\"/></svg>",svgTrail="<svg class=\"symbol-svg\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 20c0-5 12-4 12-9s-8-3-8-7\"/><circle cx=\"16\" cy=\"5\" r=\"1.7\" fill=\"white\" stroke=\"none\"/></svg>";
- const hikingSvg={hiker:"<svg class=\"symbol-svg\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"11.5\" cy=\"3.7\" r=\"1.9\" fill=\"white\" stroke=\"none\"/><path d=\"M10.5 7L8.8 12l3.3 2.4L10 20.5M9.2 12l-3 7.8M11.2 8l3.2 2.4 2.6 1M7.8 8.4l-2.3-.7-1.2 4.1 2.4 1.1M17 10.7l2.7 10.2\"/></svg>",boot:"<svg class=\"symbol-svg\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M7.8 3.5h6.4v8l2.5 3.4 4 1.8v3.6H3.2v-3.6l3.4-5.7 1.2-7.5zM7.6 7h5.5M7 10h6.2M3.8 17.2h16.3\"/></svg>"};
- let hikingSelection='hiker';
- document.querySelectorAll('input[name="hiking-option"]').forEach(input=>input.addEventListener('change',()=>{
-   if(!input.checked)return;
-   hikingSelection=input.value;
-   for(const e of entries){
-     if(e.point.tags.highway!=='footway')continue;
-     e.type.symbol=hikingSvg[hikingSelection];
-     e.marker.setIcon(icon(e.type));
-   }
-   closeSpider();render();
- }));
+ const selectedHikingSvg="<svg class=\"symbol-svg\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"11.5\" cy=\"3.7\" r=\"1.9\" fill=\"white\" stroke=\"none\"/><path d=\"M10.5 7L8.8 12l3.3 2.4L10 20.5M9.2 12l-3 7.8M11.2 8l3.2 2.4 2.6 1M7.8 8.4l-2.3-.7-1.2 4.1 2.4 1.1M17 10.7l2.7 10.2\"/></svg>";
  function classify(p){
    if(p.kind==='barrier')return {layer:'barrier',style:'barrier',symbol:'!'};
    if(['footway','cycleway','path'].includes(p.tags.highway)){
      const highway=p.tags.highway;
-     return highway==='footway'?{layer:'path',style:'walk',symbol:hikingSvg[hikingSelection]}:highway==='cycleway'?{layer:'path',style:'bike',symbol:svgBike}:{layer:'path',style:'trail',symbol:svgTrail};
+     return highway==='footway'?{layer:'path',style:'walk',symbol:selectedHikingSvg}:highway==='cycleway'?{layer:'path',style:'bike',symbol:svgBike}:{layer:'path',style:'trail',symbol:svgTrail};
    }
    return {layer:'road',style:'road',symbol:'?'};
  }
