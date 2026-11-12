@@ -86,6 +86,8 @@ else{
  const pane=map.createPane('osmIconConceptPane');pane.style.zIndex='350';
  const groups={barrier:L.layerGroup().addTo(map),road:L.layerGroup().addTo(map),path:L.layerGroup().addTo(map)};
  const clusters=L.layerGroup().addTo(map);
+ const spider=L.layerGroup().addTo(map);
+ let activeSpiderMarker=null;
  let entries=[];
  const inputs={barrier:document.getElementById('barrier'),road:document.getElementById('road'),path:document.getElementById('path')};
  const ui=document.getElementById('panel'),toggle=document.getElementById('collapse');
@@ -111,31 +113,74 @@ else{
  function icon(c){
    return L.divIcon({className:'',html:'<div class="nt-pin osm '+c.style+'"><span>'+c.symbol+'</span></div>',iconSize:[42,44],iconAnchor:[21,37]});
  }
+ function clusterFor(visible,z){
+   if(z>=16){
+     const projected=visible.map(e=>map.project([e.point.lat,e.point.lon],z));
+     const roots=visible.map((_,i)=>i);
+     function root(i){while(roots[i]!==i){roots[i]=roots[roots[i]];i=roots[i];}return i;}
+     for(let i=0;i<visible.length;i++)for(let j=i+1;j<visible.length;j++){
+       if(Math.abs(projected[i].x-projected[j].x)<42&&Math.abs(projected[i].y-projected[j].y)<44){
+         const a=root(i),b=root(j);if(a!==b)roots[b]=a;
+       }
+     }
+     const groupsByRoot=new Map();
+     visible.forEach((e,i)=>{const k=root(i);if(!groupsByRoot.has(k))groupsByRoot.set(k,[]);groupsByRoot.get(k).push(e);});
+     return [...groupsByRoot.values()];
+   }
+   const cells=new Map();
+   for(const e of visible){
+     const px=map.project([e.point.lat,e.point.lon],z),key=Math.floor(px.x/64)+':'+Math.floor(px.y/64);
+     if(!cells.has(key))cells.set(key,[]);
+     cells.get(key).push(e);
+   }
+   return [...cells.values()];
+ }
+ function closeSpider(){
+   spider.clearLayers();
+   if(activeSpiderMarker)clusters.addLayer(activeSpiderMarker);
+   activeSpiderMarker=null;
+ }
+ function showSpider(set,clusterMarker,lat,lon){
+   closeSpider();
+   activeSpiderMarker=clusterMarker;
+   clusters.removeLayer(clusterMarker);
+   const z=map.getZoom(),center=map.project([lat,lon],z);
+   const radius=Math.max(68,Math.ceil(set.length*53/(2*Math.PI)));
+   set.forEach((e,i)=>{
+     const angle=-Math.PI/2+i*2*Math.PI/set.length;
+     const destination=map.unproject([center.x+radius*Math.cos(angle),center.y+radius*Math.sin(angle)],z);
+     L.polyline([[e.point.lat,e.point.lon],destination],{pane:'osmIconConceptPane',weight:1.7,color:'#f4f5e9',opacity:.82,interactive:false}).addTo(spider);
+     L.circleMarker([e.point.lat,e.point.lon],{pane:'osmIconConceptPane',radius:3,color:'#f4f5e9',weight:1,fillColor:'#294635',fillOpacity:1,interactive:false}).addTo(spider);
+     L.marker(destination,{icon:icon(e.type),pane:'osmIconConceptPane',bubblingMouseEvents:false,keyboard:true,
+       title:'Odsunięta pinezka OSM — linia wskazuje położenie źródłowe'})
+       .bindPopup(e.marker.getPopup().getContent())
+       .addTo(spider);
+   });
+   status.textContent='Rozdzielono '+set.length+' obserwacji OSM. Linie wskazują zapisane położenia, nie zmieniają danych.';
+ }
  function render(){
+   closeSpider();
    for(const g of Object.values(groups))g.clearLayers();
    clusters.clearLayers();
    const visible=entries.filter(e=>inputs[e.type.layer].checked);
-   if(map.getZoom()>=16){
-     for(const e of visible)e.marker.addTo(groups[e.type.layer]);
-   }else{
-     const cells=new Map(),z=map.getZoom();
-     for(const e of visible){
-       const px=map.project([e.point.lat,e.point.lon],z),key=Math.floor(px.x/64)+':'+Math.floor(px.y/64);
-       if(!cells.has(key))cells.set(key,[]);
-       cells.get(key).push(e);
-     }
-     for(const set of cells.values()){
-       if(set.length===1){const e=set[0];e.marker.addTo(groups[e.type.layer]);continue;}
-       const lat=set.reduce((sum,e)=>sum+e.point.lat,0)/set.length;
-       const lon=set.reduce((sum,e)=>sum+e.point.lon,0)/set.length;
-       const c=L.divIcon({className:'',html:'<div class="cluster">'+set.length+'</div>',iconSize:[42,42],iconAnchor:[21,21]});
-       L.marker([lat,lon],{icon:c,pane:'osmIconConceptPane',bubblingMouseEvents:false,keyboard:true})
-         .on('click',ev=>{if(ev.originalEvent)L.DomEvent.stopPropagation(ev.originalEvent);map.setView([lat,lon],Math.min(map.getZoom()+2,16),{animate:false});})
-         .addTo(clusters);
-     }
+   for(const set of clusterFor(visible,map.getZoom())){
+     if(set.length===1){const e=set[0];e.marker.addTo(groups[e.type.layer]);continue;}
+     const lat=set.reduce((sum,e)=>sum+e.point.lat,0)/set.length;
+     const lon=set.reduce((sum,e)=>sum+e.point.lon,0)/set.length;
+     const c=L.divIcon({className:'',html:'<div class="cluster">'+set.length+'</div>',iconSize:[42,42],iconAnchor:[21,21]});
+     const clusterMarker=L.marker([lat,lon],{icon:c,pane:'osmIconConceptPane',bubblingMouseEvents:false,keyboard:true,
+       title:map.getZoom()>=16?'Rozdziel bliskie wpisy OSM':'Przybliż wpisy OSM'});
+     clusterMarker.on('click',ev=>{
+       if(ev.originalEvent)L.DomEvent.stopPropagation(ev.originalEvent);
+       map.closePopup();
+       if(map.getZoom()>=16)showSpider(set,clusterMarker,lat,lon);
+       else map.setView([lat,lon],Math.min(map.getZoom()+2,16),{animate:false});
+     }).addTo(clusters);
    }
-   status.textContent='Koncepcja legendy: '+visible.length+' obserwacji OSM • zoom '+map.getZoom()+'. Bez zapisu, bez punktów NT.';
+   status.textContent='Koncepcja legendy v2: '+visible.length+' wpisów OSM • zoom '+map.getZoom()+'. Bez zapisu, bez punktów NT.';
  }
+ map.on('click',()=>{if(activeSpiderMarker)closeSpider();});
+ map.on('dragstart',closeSpider);
  Object.values(inputs).forEach(e=>e.addEventListener('change',render));
  map.on('zoomend',render);
  fetch('data/tumba-lida.json',{credentials:'omit',cache:'no-store'}).then(r=>{if(!r.ok)throw Error('Brak danych');return r.json()})
