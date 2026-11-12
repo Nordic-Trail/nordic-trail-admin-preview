@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self'; img-src 'self' data: https://tile.openstreetmap.org https://cdn.jsdelivr.net; font-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'">
+<title>NORDIC TRAIL — PR #23 rozdzielanie pinezek OSM</title>
+<link href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet">
+<style>
+:root{color-scheme:dark;--ink:#f4f5e9;--line:#a8c99e;--glass:rgba(18,42,29,.69)}
+*{box-sizing:border-box}
+body{margin:0;background:#101b17;color:var(--ink);font:15px system-ui,-apple-system,Arial,sans-serif}
+[hidden]{display:none!important}
+#map{position:fixed;inset:0;z-index:0}
+.brand{position:fixed;z-index:1000;top:calc(10px + env(safe-area-inset-top));left:12px;padding:9px 10px;background:var(--glass);border:1px solid #e3f0d7a8;border-radius:11px;text-shadow:0 1px 2px #06130e}
+.brand strong{display:block;letter-spacing:.06em;font-size:16px}.brand small{display:block;font-size:11px;opacity:.9}
+.controls{position:fixed;z-index:1100;right:12px;top:calc(10px + env(safe-area-inset-top));width:min(290px,calc(100vw - 140px));background:var(--glass);backdrop-filter:blur(9px);border:1px solid #e3f0d7ab;border-radius:14px;padding:11px}
+.controls h1{font-size:16px;margin:0 0 8px}.controls label{display:flex;gap:9px;align-items:center;min-height:41px;border-top:1px solid #ffffff30}
+.controls input{width:23px;height:23px;accent-color:#b4c68d}
+.controls button{font:inherit;color:inherit;border:1px solid #dfead0;border-radius:10px;background:#294432;min-height:42px;padding:7px 10px;width:100%;margin-top:8px}
+.controls .note{font-size:12px;line-height:1.35;margin:8px 0 0}
+.status{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:950;padding:9px 12px;font-size:12px;border-radius:11px;background:#142a20ed;border:1px solid #dfead0a6;max-width:700px;line-height:1.4;pointer-events:none}
+.leaflet-control-zoom{margin-top:90px!important}
+.nt-osm-pin{position:relative;width:42px;height:44px;filter:drop-shadow(0 2px 3px #06130ebb);pointer-events:none}
+.nt-osm-pin::before{content:"";position:absolute;left:7px;top:3px;width:28px;height:28px;box-sizing:border-box;background:var(--nt-pin-color);border:2px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg)}
+.nt-osm-pin span{position:absolute;left:7px;top:2px;width:28px;height:28px;display:grid;place-items:center;color:#fff;font-size:18px;font-weight:800;text-shadow:0 1px 3px #06130e}
+.nt-osm-pin.barrier{--nt-pin-color:#95612d}
+.nt-osm-pin.road{--nt-pin-color:#793d24}
+.nt-osm-pin.path{--nt-pin-color:#295c7d}
+.nt-osm-cluster{display:grid;place-items:center;width:42px;height:42px;box-sizing:border-box;background:rgba(18,42,29,.42);color:#fffef4;border:2px solid rgba(241,249,228,.94);border-radius:50%;font-size:15px;font-weight:800;text-shadow:0 1px 3px #06130e;box-shadow:0 2px 8px #06130e80;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#142a20;color:#f4f5e9}.leaflet-popup-content{font:14px/1.55 system-ui,sans-serif}
+.leaflet-popup-content a{color:#e5f5bc}
+@media(max-width:520px){.controls{width:min(235px,calc(100vw - 133px));padding:9px}.controls h1{font-size:14px}.controls label{font-size:13px;min-height:38px}.brand strong{font-size:12px}.brand small{font-size:9px}.status{font-size:11px}}
+</style>
+</head>
+<body>
+<div id="map" aria-label="Mapa podglądu oznaczeń OSM"></div>
+<div class="brand"><strong>NORDIC TRAIL</strong><small>PR #23 • PODGLĄD</small></div>
+<div class="controls">
+<h1>Warstwy OSM</h1>
+<label><input id="barrier" type="checkbox" checked> Szlabany (29)</label>
+<label><input id="road" type="checkbox" checked> Drogi (26)</label>
+<label><input id="path" type="checkbox" checked> Ścieżki (11)</label>
+<button id="region" type="button">Pokaż Tumba–Lida</button>
+<p class="note">Oddal: grupy. Przybliż do zoom 16 i dotknij grupy, aby rozsunąć pinezki. Linie wskazują oryginalne współrzędne OSM.</p>
+<p class="note"><strong>Bez logowania i bez zapisu.</strong> Dostępność prawna niezweryfikowana. Drogi i ścieżki: orientacyjne środki odcinków, nie dokładne granice ograniczeń.</p>
+</div>
+<div class="status" role="status" id="status">Wczytywanie lokalnej, statycznej paczki 66 oznaczeń OSM. To wyłącznie podgląd graficzny.</div>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+'use strict';
+const map=L.map('map',{zoomControl:false}).setView([59.181,17.842],12);
+L.control.zoom({position:'bottomright'}).addTo(map);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);
+const pane=map.createPane('ntPreviewOsmPane');pane.style.zIndex='350';
+const layers={barrier:L.layerGroup().addTo(map),road:L.layerGroup().addTo(map),path:L.layerGroup().addTo(map)};
+const clusters=L.layerGroup().addTo(map);
+const spider=L.layerGroup().addTo(map);
+let activeSpiderMarker=null;
+const checks={barrier:document.getElementById('barrier'),road:document.getElementById('road'),path:document.getElementById('path')};
+const status=document.getElementById('status');let markers=[];
+const bounds=[[59.155,17.81],[59.203,17.875]];
+document.getElementById('region').addEventListener('click',()=>map.fitBounds(bounds,{padding:[20,20],maxZoom:13}));
+function classification(p){return p.kind==='barrier'?'barrier':['path','footway','cycleway'].includes(p.tags.highway)?'path':'road';}
+function iconFor(kind){
+ const symbol=kind==='barrier'?'!':kind==='road'?'?':'P';
+ return L.divIcon({className:'',html:'<div class="nt-osm-pin '+kind+'"><span>'+symbol+'</span></div>',iconSize:[42,44],iconAnchor:[21,37]});
+}
+function clustersFor(entries,zoom){
+ if(zoom>=16){
+   const pts=entries.map(e=>map.project([e.p.lat,e.p.lon],zoom));
+   const parents=entries.map((_,i)=>i);
+   function root(i){while(parents[i]!==i){parents[i]=parents[parents[i]];i=parents[i];}return i;}
+   for(let i=0;i<entries.length;i++)for(let j=i+1;j<entries.length;j++){
+     if(Math.abs(pts[i].x-pts[j].x)<42&&Math.abs(pts[i].y-pts[j].y)<44){
+       const a=root(i),b=root(j);if(a!==b)parents[b]=a;
+     }
+   }
+   const groups=new Map();
+   entries.forEach((e,i)=>{const key=root(i);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(e);});
+   return [...groups.values()];
+ }
+ const cells=new Map(),size=64;
+ for(const entry of entries){
+   const px=map.project([entry.p.lat,entry.p.lon],zoom);
+   const key=Math.floor(px.x/size)+':'+Math.floor(px.y/size);
+   if(!cells.has(key))cells.set(key,[]);
+   cells.get(key).push(entry);
+ }
+ return [...cells.values()];
+}
+function closeSpider(){
+ spider.clearLayers();
+ if(activeSpiderMarker)clusters.addLayer(activeSpiderMarker);
+ activeSpiderMarker=null;
+}
+function showSpider(entries,clusterMarker,lat,lon){
+ closeSpider();
+ activeSpiderMarker=clusterMarker;
+ clusters.removeLayer(clusterMarker);
+ const z=map.getZoom(),c=map.project([lat,lon],z);
+ const radius=Math.max(68,Math.ceil(entries.length*53/(2*Math.PI)));
+ entries.forEach((e,i)=>{
+   const a=-Math.PI/2+i*2*Math.PI/entries.length;
+   const to=map.unproject([c.x+radius*Math.cos(a),c.y+radius*Math.sin(a)],z);
+   L.polyline([[e.p.lat,e.p.lon],to],{pane:'ntPreviewOsmPane',color:'#f4f5e9',weight:1.7,opacity:.78,interactive:false}).addTo(spider);
+   L.circleMarker([e.p.lat,e.p.lon],{pane:'ntPreviewOsmPane',radius:3,color:'#f4f5e9',weight:1,fillColor:'#294635',fillOpacity:1,interactive:false}).addTo(spider);
+   L.marker(to,{icon:iconFor(e.kind),pane:'ntPreviewOsmPane',bubblingMouseEvents:false,keyboard:true,title:'Odsunięta pinezka OSM — linia wskazuje współrzędną'})
+      .bindPopup(e.marker.getPopup().getContent(),{maxWidth:260})
+      .addTo(spider);
+ });
+ status.textContent='Rozdzielono '+entries.length+' bliskich obserwacji OSM. Linie wskazują współrzędne wpisów. Podgląd bez zapisu.';
+}
+map.on('click',()=>{if(activeSpiderMarker)closeSpider();});
+map.on('dragstart',closeSpider);
+function render(){
+ closeSpider();
+ for(const group of Object.values(layers))group.clearLayers();
+ clusters.clearLayers();
+ const visible=markers.filter(entry=>checks[entry.kind].checked);
+ for(const entries of clustersFor(visible,map.getZoom())){
+   if(entries.length===1){entries[0].marker.addTo(layers[entries[0].kind]);continue;}
+   const lat=entries.reduce((sum,e)=>sum+e.p.lat,0)/entries.length;
+   const lon=entries.reduce((sum,e)=>sum+e.p.lon,0)/entries.length;
+   const icon=L.divIcon({className:'',html:'<div class="nt-osm-cluster" aria-hidden="true">'+entries.length+'</div>',iconSize:[42,42],iconAnchor:[21,21]});
+   const marker=L.marker([lat,lon],{icon,pane:'ntPreviewOsmPane',bubblingMouseEvents:false,keyboard:true,
+     title:map.getZoom()>=16?'Dotknij, aby rozsunąć '+entries.length+' pinezki OSM':'Dotknij, aby przybliżyć grupę OSM'};
+   marker.on('click',event=>{
+     if(event.originalEvent)L.DomEvent.stopPropagation(event.originalEvent);
+     if(map.getZoom()>=16)showSpider(entries,marker,lat,lon);
+     else map.setView([lat,lon],Math.min(map.getZoom()+2,16),{animate:false});
+   }).addTo(clusters);
+ }
+ status.textContent='Widoczne wpisy OSM: '+visible.length+' • zoom: '+map.getZoom()+'. Zoom 16+: dotknij grupy nakładających się pinezek, aby je rozsunąć.';
+}
+for(const input of Object.values(checks))input.addEventListener('change',render);
+map.on('zoomend',render);
+fetch('data/tumba-lida.json',{method:'GET',credentials:'omit',cache:'no-store'})
+ .then(r=>{if(!r.ok)throw Error('Brak danych');return r.json()})
+ .then(data=>{
+   if(data.source!=='OpenStreetMap'||data.licence!=='ODbL'||!Array.isArray(data.objects)||data.objects.length!==66)throw Error('Nieprawidłowa paczka');
+   markers=data.objects.map(p=>{
+     if(!Number.isFinite(p.lat)||!Number.isFinite(p.lon)||p.lat<59.155||p.lat>59.203||p.lon<17.81||p.lon>17.875)throw Error('Współrzędne poza obszarem');
+     const kind=classification(p);
+     const marker=L.marker([p.lat,p.lon],{icon:iconFor(kind),pane:'ntPreviewOsmPane',bubblingMouseEvents:false,keyboard:true,title:'OSM — niezweryfikowane'});
+     const box=document.createElement('div'),title=document.createElement('strong'),desc=document.createElement('p'),link=document.createElement('a');
+     title.textContent=kind==='barrier'?'Szlaban lub przeszkoda':kind==='road'?'Oznaczenie na drodze':'Ścieżka piesza lub rowerowa';
+     desc.textContent='ID OSM: '+p.osm_type+'/'+p.osm_id+'. '+(kind==='barrier'?'Punkt zapisany w OSM.':'Położenie: przybliżony środek odcinka.')+' Dostępność prawna niezweryfikowana.';
+     link.href='https://www.openstreetmap.org/'+p.osm_type+'/'+p.osm_id;link.target='_blank';link.rel='noopener noreferrer';link.textContent='Oryginalny wpis OSM';
+     box.append(title,desc,link);marker.bindPopup(box,{maxWidth:260});
+     return {p,kind,marker};
+   });
+   render();
+ }).catch(()=>{status.textContent='Nie udało się wczytać statycznej paczki OSM. Zobacz plik źródłowy i odśwież widok.'});
+</script>
+</body></html>
