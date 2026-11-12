@@ -20,6 +20,13 @@ body{margin:0;background:#101b17;color:var(--ink);font:15px system-ui,-apple-sys
 .controls input{width:23px;height:23px;accent-color:#b4c68d}
 .controls button{font:inherit;color:inherit;border:1px solid #dfead0;border-radius:10px;background:#294432;min-height:42px;padding:7px 10px;width:100%;margin-top:8px}
 .controls .note{font-size:12px;line-height:1.35;margin:8px 0 0}
+.controls-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.controls-header h1{margin:0;font-size:16px}
+.controls-header #toggle-controls{width:auto;min-width:68px;min-height:36px;padding:5px 8px;margin:0;font-size:13px}
+.controls.is-collapsed{width:184px}
+.controls.is-collapsed .control-body{display:none}
+.controls .control-body{margin-top:8px}
+.controls .control-body #demo{border-color:#f1e2b3;background:rgba(75,87,53,.72)}
 .status{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:950;padding:9px 12px;font-size:12px;border-radius:11px;background:#142a20ed;border:1px solid #dfead0a6;max-width:700px;line-height:1.4;pointer-events:none}
 .leaflet-control-zoom{margin-top:90px!important}
 .nt-osm-pin{position:relative;width:42px;height:44px;filter:drop-shadow(0 2px 3px #06130ebb);pointer-events:none}
@@ -36,15 +43,18 @@ body{margin:0;background:#101b17;color:var(--ink);font:15px system-ui,-apple-sys
 </head>
 <body>
 <div id="map" aria-label="Mapa podglądu oznaczeń OSM"></div>
-<div class="brand"><strong>NORDIC TRAIL</strong><small>PR #23 • PODGLĄD v2</small></div>
-<div class="controls">
-<h1>Warstwy OSM</h1>
+<div class="brand"><strong>NORDIC TRAIL</strong><small>PR #23 • PODGLĄD v3</small></div>
+<div class="controls" id="controls">
+<div class="controls-header"><h1>Warstwy OSM</h1><button id="toggle-controls" type="button" aria-controls="control-body" aria-expanded="true">Zwiń</button></div>
+<div class="control-body" id="control-body">
 <label><input id="barrier" type="checkbox" checked> Szlabany (29)</label>
 <label><input id="road" type="checkbox" checked> Drogi (26)</label>
 <label><input id="path" type="checkbox" checked> Ścieżki (11)</label>
 <button id="region" type="button">Pokaż Tumba–Lida</button>
+<button id="demo" type="button">Przetestuj rozdzielanie — zoom 16</button>
 <p class="note">Oddal: grupy. Przybliż do zoom 16 i dotknij grupy, aby rozsunąć pinezki. Linie wskazują oryginalne współrzędne OSM.</p>
 <p class="note"><strong>Bez logowania i bez zapisu.</strong> Dostępność prawna niezweryfikowana. Drogi i ścieżki: orientacyjne środki odcinków, nie dokładne granice ograniczeń.</p>
+</div>
 </div>
 <div class="status" role="status" id="status">Podgląd v2 — uruchamianie mapy OSM…</div>
 <script>
@@ -79,6 +89,18 @@ const checks={barrier:document.getElementById('barrier'),road:document.getElemen
 const status=document.getElementById('status');let markers=[];
 const bounds=[[59.155,17.81],[59.203,17.875]];
 document.getElementById('region').addEventListener('click',()=>map.fitBounds(bounds,{padding:[20,20],maxZoom:13}));
+const controls=document.getElementById('controls'),toggleControls=document.getElementById('toggle-controls');
+function setControlsCollapsed(collapsed){
+  controls.classList.toggle('is-collapsed',collapsed);
+  toggleControls.setAttribute('aria-expanded',String(!collapsed));
+  toggleControls.textContent=collapsed?'Rozwiń':'Zwiń';
+}
+toggleControls.addEventListener('click',()=>setControlsCollapsed(!controls.classList.contains('is-collapsed')));
+document.getElementById('demo').addEventListener('click',()=>{
+  map.closePopup();
+  setControlsCollapsed(true);
+  map.setView([59.2017709,17.8253088],16,{animate:false});
+});
 function classification(p){return p.kind==='barrier'?'barrier':['path','footway','cycleway'].includes(p.tags.highway)?'path':'road';}
 function iconFor(kind){
  const symbol=kind==='barrier'?'!':kind==='road'?'?':'P';
