@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self'; img-src 'self' data: https://tile.openstreetmap.org https://cdn.jsdelivr.net; base-uri 'none'; form-action 'none'; object-src 'none'">
+<title>NORDIC TRAIL — projekt legendy OSM i NT</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{color-scheme:dark;--ink:#f7f8ef;--glass:rgba(18,42,29,.65)}
+*{box-sizing:border-box}
+body{margin:0;background:#101b17;color:var(--ink);font:14px/1.45 system-ui,-apple-system,Arial,sans-serif}
+[hidden]{display:none!important}
+#map{position:fixed;inset:0;height:100dvh;width:100%;z-index:0}
+.brand{position:fixed;z-index:1000;left:10px;top:calc(10px + env(safe-area-inset-top));padding:8px 10px;background:var(--glass);border:1px solid #d5ead0b5;border-radius:11px;backdrop-filter:blur(4px);pointer-events:none}
+.brand strong{font-size:14px;letter-spacing:.07em}.brand small{display:block;font-size:10px}
+.panel{position:fixed;right:10px;top:calc(10px + env(safe-area-inset-top));width:min(270px,calc(100vw - 142px));max-height:76dvh;overflow:auto;z-index:1100;padding:10px;background:rgba(18,42,29,.74);border:1px solid #d5ead0c9;border-radius:14px;backdrop-filter:blur(7px)}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.panel h1{font-size:15px;margin:0}.panel h2{font-size:13px;margin:12px 0 6px;color:#f3f5e2}.panel p{font-size:12px;line-height:1.4;margin:7px 0}
+button{font:inherit;color:var(--ink);border:1px solid #dae7d0;border-radius:9px;background:rgba(44,72,51,.85);padding:7px 10px;min-height:39px;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:3px solid #f0cf7d;outline-offset:2px}
+#collapse{font-size:12px;min-height:35px}
+.panel.collapsed{width:auto;max-width:155px}.panel.collapsed #panel-body{display:none}
+.option{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #fff3;min-height:38px;font-size:13px}
+.option input{accent-color:#b9d39f;height:21px;width:21px;margin:0}
+.row{display:flex;align-items:center;gap:9px;padding:4px 0;font-size:12px}
+.row small{opacity:.8}.pill{font-size:11px;color:#fff0dd;border:1px solid #e8f2e3aa;border-radius:20px;padding:2px 6px}
+.status{position:fixed;left:10px;bottom:calc(10px + env(safe-area-inset-bottom));max-width:calc(100vw - 20px);padding:8px 11px;z-index:990;background:#142920e8;border:1px solid #d5ead0c1;border-radius:10px;font-size:12px}
+.nt-pin{position:relative;width:42px;height:44px;filter:drop-shadow(0 2px 3px #06130e9a);pointer-events:none}
+.nt-pin:before{content:"";position:absolute;left:7px;top:3px;width:28px;height:28px;border:2px solid #fff;box-sizing:border-box;border-radius:50% 50% 50% 0;background:var(--pin);transform:rotate(-45deg)}
+.nt-pin span{position:absolute;top:2px;left:7px;width:28px;height:28px;display:grid;place-items:center;font-size:16px;font-weight:900;color:#fff;text-shadow:0 1px 2px #041309}
+.nt-pin.osm{opacity:.78}.nt-pin.barrier{--pin:#95612d}.nt-pin.road{--pin:#793d24}.nt-pin.walk{--pin:#295c7d}.nt-pin.bike{--pin:#295c7d}.nt-pin.trail{--pin:#295c7d}
+.nt-pin.nt-gate{--pin:#bb8b38}.nt-pin.nt-closed{--pin:#bd5149}.nt-pin.nt-place{--pin:#5b8f55}
+.legend-pin{display:inline-block;vertical-align:middle;position:relative;width:31px;height:32px;flex:0 0 31px}
+.legend-pin .nt-pin{transform:scale(.72);transform-origin:top left}
+.cluster{display:grid;place-items:center;width:42px;height:42px;border-radius:50%;background:rgba(18,42,29,.42);border:2px solid #ecf5e8;color:#fff;font-size:15px;font-weight:800;backdrop-filter:blur(3px)}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#142a20;color:#fff}
+.leaflet-popup-content{font:13px/1.5 system-ui,sans-serif}.leaflet-popup-content a{color:#eaf1ba}
+.leaflet-control-zoom{margin-top:80px!important}
+@media(max-width:530px){.panel{width:min(235px,calc(100vw - 132px))}.panel h1{font-size:13px}.brand strong{font-size:12px}.brand small{font-size:9px}}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="brand"><strong>NORDIC TRAIL</strong><small>KONCEPCJA IKON • BEZ ZAPISU</small></div>
+<div class="panel" id="panel">
+ <div class="panel-head"><h1>Legenda mapy</h1><button id="collapse" type="button" aria-controls="panel-body" aria-expanded="true">Zwiń</button></div>
+ <div id="panel-body">
+  <h2>OSM <span class="pill">dane źródłowe</span></h2>
+  <div class="row"><span class="legend-pin"><span class="nt-pin osm barrier"><span>!</span></span></span>Szlaban / przeszkoda</div>
+  <div class="row"><span class="legend-pin"><span class="nt-pin osm road"><span>?</span></span></span>Tag ograniczenia drogi</div>
+  <div class="row"><span class="legend-pin"><span class="nt-pin osm walk"><span>🚶</span></span></span>Footway — piesza</div>
+  <div class="row"><span class="legend-pin"><span class="nt-pin osm bike"><span>🚲</span></span></span>Cycleway — rowerowa</div>
+  <div class="row"><span class="legend-pin"><span class="nt-pin osm trail"><span>≋</span></span></span>Path — typ nieustalony</div>
+  <p>Oznaczenia wynikają z tagów OSM; nie potwierdzają legalnego dostępu ani przejezdności.</p>
+  <h2>NORDIC TRAIL <span class="pill">projekt ikon</span></h2>
+  <div class="row"><span class="legend-pin"><span class="nt-pin nt-gate"><span>NT</span></span></span>Szlaban — status użytkowników</div>
+  <div class="row"><span class="legend-pin"><span class="nt-pin nt-closed"><span>NT</span></span></span>Droga — status użytkowników</div>
+  <div class="row"><span class="legend-pin"><span class="nt-pin nt-place"><span>NT</span></span></span>Miejsce — status użytkowników</div>
+  <p>Ikony NT są propozycją w legendzie — nie nanosimy fikcyjnych punktów na mapę. Moderacja nie oznacza kontroli terenowej.</p>
+  <h2>Filtry danych OSM</h2>
+  <label class="option"><input id="barrier" type="checkbox" checked> Szlabany (29)</label>
+  <label class="option"><input id="road" type="checkbox" checked> Drogi (26)</label>
+  <label class="option"><input id="path" type="checkbox" checked> Ścieżki (11)</label>
+  <button id="region" type="button">Pokaż Tumba–Lida</button>
+  <p><strong>P</strong> zostawiamy wyłącznie dla parkingów, których nie ma w tej paczce. Parking nie jest nową kategorią MVP.</p>
+ </div>
+</div>
+<div class="status" id="status" role="status">Wczytywanie podglądu legendy…</div>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+'use strict';
+const status=document.getElementById('status');
+if(!window.L){status.textContent='Nie można uruchomić mapy: brak Leaflet.';}
+else{
+ const map=L.map('map',{zoomControl:false}).setView([59.181,17.842],12);
+ L.control.zoom({position:'bottomright'}).addTo(map);
+ L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);
+ const pane=map.createPane('osmIconConceptPane');pane.style.zIndex='350';
+ const groups={barrier:L.layerGroup().addTo(map),road:L.layerGroup().addTo(map),path:L.layerGroup().addTo(map)};
+ const clusters=L.layerGroup().addTo(map);
+ let entries=[];
+ const inputs={barrier:document.getElementById('barrier'),road:document.getElementById('road'),path:document.getElementById('path')};
+ const ui=document.getElementById('panel'),toggle=document.getElementById('collapse');
+ toggle.addEventListener('click',()=>{
+   const collapsed=ui.classList.toggle('collapsed');
+   toggle.textContent=collapsed?'Rozwiń':'Zwiń';
+   toggle.setAttribute('aria-expanded',String(!collapsed));
+ });
+ document.getElementById('region').addEventListener('click',()=>map.fitBounds([[59.155,17.81],[59.203,17.875]],{padding:[18,18],maxZoom:13}));
+ function classify(p){
+   if(p.kind==='barrier')return {layer:'barrier',style:'barrier',symbol:'!'};
+   if(['footway','cycleway','path'].includes(p.tags.highway)){
+     const highway=p.tags.highway;
+     return highway==='footway'?{layer:'path',style:'walk',symbol:'🚶'}:highway==='cycleway'?{layer:'path',style:'bike',symbol:'🚲'}:{layer:'path',style:'trail',symbol:'≋'};
+   }
+   return {layer:'road',style:'road',symbol:'?'};
+ }
+ function icon(c){
+   return L.divIcon({className:'',html:'<div class="nt-pin osm '+c.style+'"><span>'+c.symbol+'</span></div>',iconSize:[42,44],iconAnchor:[21,37]});
+ }
+ function render(){
+   for(const g of Object.values(groups))g.clearLayers();
+   clusters.clearLayers();
+   const visible=entries.filter(e=>inputs[e.type.layer].checked);
+   if(map.getZoom()>=16){
+     for(const e of visible)e.marker.addTo(groups[e.type.layer]);
+   }else{
+     const cells=new Map(),z=map.getZoom();
+     for(const e of visible){
+       const px=map.project([e.point.lat,e.point.lon],z),key=Math.floor(px.x/64)+':'+Math.floor(px.y/64);
+       if(!cells.has(key))cells.set(key,[]);
+       cells.get(key).push(e);
+     }
+     for(const set of cells.values()){
+       if(set.length===1){const e=set[0];e.marker.addTo(groups[e.type.layer]);continue;}
+       const lat=set.reduce((sum,e)=>sum+e.point.lat,0)/set.length;
+       const lon=set.reduce((sum,e)=>sum+e.point.lon,0)/set.length;
+       const c=L.divIcon({className:'',html:'<div class="cluster">'+set.length+'</div>',iconSize:[42,42],iconAnchor:[21,21]});
+       L.marker([lat,lon],{icon:c,pane:'osmIconConceptPane',bubblingMouseEvents:false,keyboard:true})
+         .on('click',ev=>{if(ev.originalEvent)L.DomEvent.stopPropagation(ev.originalEvent);map.setView([lat,lon],Math.min(map.getZoom()+2,16),{animate:false});})
+         .addTo(clusters);
+     }
+   }
+   status.textContent='Koncepcja legendy: '+visible.length+' obserwacji OSM • zoom '+map.getZoom()+'. Bez zapisu, bez punktów NT.';
+ }
+ Object.values(inputs).forEach(e=>e.addEventListener('change',render));
+ map.on('zoomend',render);
+ fetch('data/tumba-lida.json',{credentials:'omit',cache:'no-store'}).then(r=>{if(!r.ok)throw Error('Brak danych');return r.json()})
+ .then(d=>{
+   if(d.source!=='OpenStreetMap'||d.licence!=='ODbL'||!Array.isArray(d.objects)||d.objects.length!==66)throw Error('Niewłaściwa paczka');
+   entries=d.objects.map(p=>{
+     if(!Number.isFinite(p.lat)||!Number.isFinite(p.lon)||p.lat<59.155||p.lat>59.203||p.lon<17.81||p.lon>17.875)throw Error('Błędny punkt');
+     const type=classify(p),marker=L.marker([p.lat,p.lon],{icon:icon(type),pane:'osmIconConceptPane',bubblingMouseEvents:false,keyboard:true});
+     const content=document.createElement('div'),heading=document.createElement('strong'),desc=document.createElement('p'),link=document.createElement('a');
+     heading.textContent='OpenStreetMap — '+(p.tags.highway||p.tags.barrier||'obserwacja');
+     desc.textContent='OSM '+p.osm_type+'/'+p.osm_id+'. Dostępność prawna niezweryfikowana.'+(p.osm_type==='way'?' Pinezka oznacza przybliżony środek odcinka.':'');
+     link.href='https://www.openstreetmap.org/'+p.osm_type+'/'+p.osm_id;link.target='_blank';link.rel='noopener noreferrer';link.textContent='Otwórz wpis źródłowy';
+     content.append(heading,desc,link);marker.bindPopup(content);
+     return {point:p,type,marker};
+   });
+   render();
+ }).catch(()=>{status.textContent='Nie udało się wczytać danych. Weryfikacja źródła wymagana.';});
+}
+</script>
+</body>
+</html>
