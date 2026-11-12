@@ -20,7 +20,7 @@ body{margin:0;background:#12251c;color:#f5f8ee;font:16px/1.45 system-ui,-apple-s
 .switcher button:focus-visible,.reopen:focus-visible,#nt-osm-detail-close:focus-visible{outline:3px solid #f1d98b;outline-offset:2px}
 .reopen{position:fixed;z-index:1250;bottom:15px;right:10px;background:#254431;border-color:#d5e8d1}
 #review-note{position:fixed;z-index:1250;top:calc(66px + env(safe-area-inset-top));right:10px;padding:5px 8px;border-radius:8px;background:rgba(18,42,29,.89);font-size:11px;max-width:200px;text-align:right}
-.nt-osm-detail-sheet{position:fixed;z-index:1230;left:50%;bottom:0;transform:translateX(-50%);width:min(100%,550px);max-height:min(76dvh,680px);overflow-y:auto;overscroll-behavior:contain;background:rgba(18,42,29,.91);border:1.5px solid rgba(231,245,219,.82);border-radius:20px 20px 0 0;padding:20px 18px calc(23px + env(safe-area-inset-bottom));color:#f5f8ee;backdrop-filter:blur(9px) saturate(1.08);-webkit-backdrop-filter:blur(9px) saturate(1.08);box-shadow:0 -12px 38px #06130e99}
+.nt-osm-detail-sheet{position:fixed;z-index:1230;left:50%;bottom:0;transform:translateX(-50%);width:min(100%,550px);max-height:min(76dvh,680px);overflow-y:auto;overscroll-behavior:contain;background:rgba(18,42,29,.40);border:1.5px solid rgba(231,245,219,.82);border-radius:20px 20px 0 0;padding:20px 18px calc(23px + env(safe-area-inset-bottom));color:#f5f8ee;backdrop-filter:blur(9px) saturate(1.08);-webkit-backdrop-filter:blur(9px) saturate(1.08);box-shadow:0 -12px 38px #06130e99}
 .nt-osm-detail-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}
 .nt-osm-detail-heading h2{font-size:21px;margin:0}
 #nt-osm-detail-close{width:48px;min-width:48px;min-height:48px;margin:0;padding:0;font-size:24px;background:rgba(9,29,19,.73);color:#fff;border:1px solid rgba(231,245,219,.82);border-radius:12px;cursor:pointer}
@@ -50,7 +50,7 @@ body{margin:0;background:#12251c;color:#f5f8ee;font:16px/1.45 system-ui,-apple-s
   <button type="button" id="old" aria-pressed="false">Było</button>
   <button type="button" id="new" aria-pressed="true">Poprawka</button>
 </div>
-<div id="review-note" role="status">Poprawka: tło 91%</div>
+<div id="review-note" role="status">Poprawka: tło 40%</div>
 <section id="nt-osm-detail-sheet" class="nt-osm-detail-sheet" role="dialog" aria-modal="false" aria-labelledby="nt-osm-detail-title">
 <div class="nt-osm-detail-heading"><h2 id="nt-osm-detail-title">Oznaczenie na drodze</h2><button type="button" id="nt-osm-detail-close" aria-label="Zamknij kartę OSM">×</button></div>
 <p class="nt-osm-micro">Środek odcinka jest przybliżony, nie stanowi zasięgu ograniczenia.</p>
@@ -83,7 +83,7 @@ function setVersion(before){
  document.body.classList.toggle('before',before);
  oldButton.setAttribute('aria-pressed',String(before));
  newButton.setAttribute('aria-pressed',String(!before));
- note.textContent=before?'Było: tło 28%':'Poprawka: tło 91%';
+ note.textContent=before?'Było: tło 28%':'Poprawka: tło 40%';
 }
 oldButton.addEventListener('click',()=>setVersion(true));
 newButton.addEventListener('click',()=>setVersion(false));
